@@ -40,6 +40,7 @@ TRACK_MAX_AGE = 8
 DETECTION_TTL_S = 1.2
 ANALYSIS_TTL_S = 8.0
 CALLOUT_COOLDOWN_S = 5.0
+HIGH_ANOMALY_THRESHOLD = 0.15   # anomaly_score above this → red border (vs yellow)
 
 # COCO labels irrelevant to CAT inspection — suppress from terminal/display
 _IGNORE_LABELS = {
@@ -53,6 +54,19 @@ _IGNORE_LABELS = {
     "snowboard", "sports ball", "kite", "baseball bat", "baseball glove",
     "skateboard", "surfboard", "tennis racket",
 }
+
+def _iou_hud(a, b):
+    """IoU for two normalized [x1,y1,x2,y2] bboxes."""
+    if len(a) < 4 or len(b) < 4:
+        return 0.0
+    x1, y1 = max(a[0], b[0]), max(a[1], b[1])
+    x2, y2 = min(a[2], b[2]), min(a[3], b[3])
+    inter = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+    area_a = max(0.0, a[2] - a[0]) * max(0.0, a[3] - a[1])
+    area_b = max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
+    union = area_a + area_b - inter
+    return inter / union if union > 0.0 else 0.0
+
 
 ALL_ZONES = [
     "boom_arm", "bucket", "cab", "cooling", "drivetrain",
@@ -435,6 +449,10 @@ class HUD:
         self.vlm_description = ""
         self.vlm_findings = []
         self.mode = "general"
+        # Tier 2 triage state
+        self.triage_boxes = []        # [{bbox, is_flagged, anomaly_score, top_anomaly_match}]
+        self.anomaly_flash_boxes = [] # [{bbox, ts, score, label, top_anomaly}]
+        self.t2_ms = 0
 
     @staticmethod
     def _dark_rect(frame, x, y, w, h, alpha=0.55):
@@ -449,16 +467,42 @@ class HUD:
     def render(self, frame, tracks, zone_status, coverage_pct, completed_zones, confirmed_zones):
         h, w = frame.shape[:2]
 
+        now_hud = time.time()
         for t in tracks:
             bx = t.bbox
             x1, y1 = int(bx[0] * w), int(bx[1] * h)
             x2, y2 = int(bx[2] * w), int(bx[3] * h)
-            zone = t.zone or ""
-            rating = zone_status.get(zone, "GRAY") if zone else "GRAY"
-            color = ZONE_COLORS.get(rating, (255, 255, 255))
-            thickness = 2 if rating in ("GREEN", "GRAY") else 3
+
+            # Determine color: Tier 2 triage result takes priority over zone_status
+            triage_color = None
+            bbox_list = bx.tolist() if hasattr(bx, "tolist") else list(bx)
+            for tb in self.triage_boxes:
+                if _iou_hud(bbox_list, tb.get("bbox", [])) > 0.25:
+                    if tb.get("is_flagged"):
+                        triage_color = (0, 0, 220) if tb.get("anomaly_score", 0) > HIGH_ANOMALY_THRESHOLD else (0, 200, 255)
+                    break
+
+            if triage_color:
+                color = triage_color
+                thickness = 3
+            else:
+                zone = t.zone or ""
+                rating = zone_status.get(zone, "GRAY") if zone else "GRAY"
+                color = ZONE_COLORS.get(rating, (255, 255, 255))
+                thickness = 2 if rating in ("GREEN", "GRAY") else 3
+
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+
+            # Anomaly flash effect (pulsing border for recently flagged detections)
+            for fb in self.anomaly_flash_boxes:
+                if _iou_hud(bbox_list, fb.get("bbox", [])) > 0.25:
+                    age = now_hud - fb.get("ts", 0)
+                    if age < 3.0 and int(age * 4) % 2 == 0:
+                        cv2.rectangle(frame, (x1 - 3, y1 - 3), (x2 + 3, y2 + 3), (0, 255, 255), 4)
+                    break
+
             conf_str = f"{t.confidence:.0%}" if t.confidence else ""
+            zone = t.zone or ""
             txt = f"{t.label} {conf_str}" + (f" [{zone}]" if zone else "")
             cv2.putText(frame, txt, (x1, max(y1 - 6, 14)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.42, color, 1, cv2.LINE_AA)
@@ -471,7 +515,7 @@ class HUD:
         ws_color = (0, 200, 0) if self.ws_connected else (0, 0, 220)
         cv2.circle(frame, (w - 260, 18), 5, ws_color, -1)
         latency_txt = (
-            f"WS {self.ws_latency_ms}ms | YOLO {self.yolo_ms}ms | "
+            f"WS {self.ws_latency_ms}ms | YOLO {self.yolo_ms}ms | T2 {self.t2_ms}ms | "
             f"S/R {self.send_fps:.1f}/{self.recv_fps:.1f} | Age {self.det_age_ms}ms | Drop {self.dropped_frames}"
         )
         cv2.putText(frame, latency_txt, (w - 250, 22),
@@ -727,6 +771,12 @@ shared = {
     "last_analysis_ts": 0.0,
     "last_analysis_frame_id": -1,
     "inspection_mode": "general",
+    # Tier 2 triage
+    "triage_boxes": [],
+    "triage_boxes_ts": 0.0,
+    "anomaly_flash_boxes": [],
+    "t2_ms": 0,
+    "anomaly_callout_ts": 0.0,
 }
 
 
@@ -955,6 +1005,46 @@ async def ws_loop(url, unit_info, spec_kb):
                         speak(first_sent + ".")
                     else:
                         speak(answer[:80])
+
+                elif t == "anomaly_flag":
+                    bbox = msg.get("bbox", [])
+                    label = msg.get("label", "")
+                    top_anomaly = msg.get("top_anomaly_match", "")
+                    score = msg.get("anomaly_score", 0.0)
+                    now_t = time.time()
+                    with shared_lock:
+                        shared["anomaly_flash_boxes"].append({
+                            "bbox": bbox, "ts": now_t,
+                            "score": score, "label": label, "top_anomaly": top_anomaly,
+                        })
+                        # Expire entries older than 4 s
+                        shared["anomaly_flash_boxes"] = [
+                            b for b in shared["anomaly_flash_boxes"] if now_t - b["ts"] < 4.0
+                        ]
+                    print(f"  [T2 FLAG] {label}: {top_anomaly} (score={score:.3f})")
+                    if now_t - shared.get("anomaly_callout_ts", 0.0) > CALLOUT_COOLDOWN_S:
+                        shared["anomaly_callout_ts"] = now_t
+                        speak(f"Checking {top_anomaly or label}")
+
+                elif t == "triage_summary":
+                    results = msg.get("results", [])
+                    t2_ms = msg.get("t2_ms", 0)
+                    shared["t2_ms"] = t2_ms
+                    with shared_lock:
+                        shared["triage_boxes"] = [
+                            {
+                                "bbox": r["bbox"],
+                                "is_flagged": r.get("is_flagged", False),
+                                "anomaly_score": r.get("anomaly_score", 0.0),
+                                "top_anomaly_match": r.get("top_anomaly_match", ""),
+                            }
+                            for r in results if "bbox" in r
+                        ]
+                        shared["triage_boxes_ts"] = time.time()
+                    flagged = msg.get("flagged_count", 0)
+                    total = msg.get("total_detections", 0)
+                    if total > 0:
+                        print(f"  [T2] {flagged}/{total} flagged | {t2_ms}ms")
 
                 elif t == "mode":
                     mode = msg.get("mode", "general")
@@ -1288,6 +1378,11 @@ def main():
             hud.vlm_description = shared.get("vlm_description", "")
             hud.vlm_findings = shared.get("vlm_findings", [])
             hud.mode = shared.get("inspection_mode", "general")
+            # Tier 2 triage — expire triage_boxes after DETECTION_TTL_S
+            triage_age = now - shared.get("triage_boxes_ts", 0.0)
+            hud.triage_boxes = shared.get("triage_boxes", []) if triage_age < DETECTION_TTL_S else []
+            hud.anomaly_flash_boxes = list(shared.get("anomaly_flash_boxes", []))
+            hud.t2_ms = shared.get("t2_ms", 0)
 
             zone_status = shared.get("zone_status", {})
             completed_zones = set(shared.get("detected_zones", set())).union(
