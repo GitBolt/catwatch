@@ -32,6 +32,7 @@ def web():
 
         seen_zones = set()
         zone_findings = {}
+        zone_status = {}   # zone → latest severity ("GREEN"/"YELLOW"/"RED")
         sensor_snapshot = {}
         latest_frame_b64 = None
         latest_frame_id = -1
@@ -41,8 +42,8 @@ def web():
         vlm_busy = False
         inspection_mode = "general"
 
-        async def run_vlm_analysis(frame_b64, frame_id, frame_client_ts):
-            nonlocal vlm_busy, last_vlm_run_ts
+        async def run_vlm_analysis(frame_b64, frame_id, frame_client_ts, detections=None):
+            nonlocal vlm_busy, last_vlm_run_ts, zone_status
             if vlm_busy:
                 return
             vlm_busy = True
@@ -54,20 +55,45 @@ def web():
                     GENERAL_OUTPUT_SCHEMA,
                     GENERAL_SCENE_PERSONA,
                     VLM_OUTPUT_SCHEMA,
+                    SPEC_KB,
+                    format_yolo_context,
+                    format_session_context,
+                    format_spec_context,
                 )
                 persona = CAT_INSPECTION_PERSONA if inspection_mode == "cat" else GENERAL_SCENE_PERSONA
                 schema = VLM_OUTPUT_SCHEMA if inspection_mode == "cat" else GENERAL_OUTPUT_SCHEMA
+
+                yolo_ctx = format_yolo_context(detections or [])
+                session_ctx = format_session_context(zone_status, seen_zones)
+                detected_zone_ids = list({d.get("zone") for d in (detections or []) if d.get("zone")})
+                spec_ctx = format_spec_context(detected_zone_ids, SPEC_KB) if inspection_mode == "cat" else ""
+                context_block = "\n\n".join(filter(None, [yolo_ctx, session_ctx, spec_ctx]))
+                grounded_schema = f"{context_block}\n\n{schema}"
+
                 analysis = await asyncio.wait_for(
                     asyncio.to_thread(
                         qwen.analyze_frame.remote,
                         frame_b64,
                         persona,
-                        schema,
+                        grounded_schema,
                     ),
                     timeout=120,
                 )
                 if not isinstance(analysis, dict):
                     analysis = {"description": str(analysis), "severity": "GREEN", "findings": [], "callout": "", "confidence": 0.5, "zone": None}
+
+                # Update session state so next VLM call sees this finding in context.
+                found_zone = analysis.get("zone")
+                if found_zone:
+                    zone_status[found_zone] = analysis.get("severity", "GREEN")
+                    zone_findings[found_zone] = {
+                        "zone": found_zone,
+                        "rating": analysis.get("severity", "GREEN"),
+                        "description": analysis.get("description", ""),
+                        "findings": analysis.get("findings", []),
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                    }
+
                 print(f"[VLM] Analysis done for frame {frame_id}: {analysis.get('description', '')[:80]}")
                 await ws.send_json({
                     "type": "analysis",
@@ -211,9 +237,10 @@ def web():
                 else:
                     context = "You are a visual copilot for general scene and safety monitoring."
                 prompt = (
-                    f"{context} The technician asks: \"{question}\""
-                    "\nAnswer in one concise sentence based on the image."
-                    " Be specific and avoid repeating the question."
+                    f"{context} The technician says: \"{question}\""
+                    "\nIf this is a clear inspection-related question or command about the visible scene or equipment, answer in one concise sentence."
+                    "\nIf this is casual commentary, an exclamation, social phrase, or clearly unrelated to inspection (e.g. 'okay', 'let\\'s go', 'it works', 'thank you'), respond with exactly: SKIP"
+                    "\nBe specific. Do not repeat the question."
                 )
                 answer = await asyncio.wait_for(
                     asyncio.to_thread(qwen.generate.remote, prompt, frame_b64),
@@ -224,6 +251,9 @@ def web():
             except Exception as e:
                 print(f"[VOICE Q] Error: {e}")
                 answer = "Could not process question."
+            if answer.strip().upper().startswith("SKIP"):
+                print(f"[VOICE Q] Ignored non-inspection input: {question[:40]}")
+                return
             print(f"[VOICE A] {answer[:80]}")
             await ws.send_json({
                 "type": "voice_answer",
@@ -274,7 +304,7 @@ def web():
                     and (now_mono - last_vlm_run_ts) >= vlm_min_interval_s
                 ):
                     asyncio.create_task(
-                        run_vlm_analysis(latest_frame_b64, latest_frame_id, latest_frame_client_ts)
+                        run_vlm_analysis(latest_frame_b64, latest_frame_id, latest_frame_client_ts, detections)
                     )
             except Exception as e:
                 print(f"[YOLO] Error: {e}")

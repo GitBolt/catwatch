@@ -2,7 +2,7 @@ import base64
 import io
 import modal
 
-from . import app, yolo_image
+from . import app, yolo_image, models_volume
 
 
 @app.cls(
@@ -10,13 +10,21 @@ from . import app, yolo_image
     image=yolo_image,
     min_containers=1,
     scaledown_window=600,
+    volumes={"/models": models_volume},
 )
 class YoloDetector:
     @modal.enter()
     def load(self):
+        from pathlib import Path
         from ultralytics import YOLO
-        self.model = YOLO("yolov8n.pt")
-        print("[YoloDetector] Loaded yolov8n on T4.")
+
+        custom = Path("/models/dronecat_yolo_best.pt")
+        if custom.exists():
+            self.model = YOLO(str(custom))
+            print(f"[YoloDetector] Loaded custom dronecat model from volume.")
+        else:
+            self.model = YOLO("yolov8n.pt")
+            print("[YoloDetector] No custom model found — using yolov8n (COCO fallback).")
 
     @modal.method()
     def detect(self, frame_b64):
