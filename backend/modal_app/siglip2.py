@@ -51,12 +51,14 @@ _TRIAGE_ANOMALY_PROMPTS = [
 class SigLIP2PartsIdentifier:
     @modal.enter()
     def load(self):
-        from transformers import AutoProcessor, AutoModel
+        from transformers import SiglipProcessor, SiglipModel
         import torch
 
         model_id = "google/siglip2-so400m-patch14-384"
-        self.processor = AutoProcessor.from_pretrained(model_id)
-        self.model = AutoModel.from_pretrained(model_id, torch_dtype=torch.float16).to("cuda")
+        # Use direct Siglip classes — AutoProcessor has a tokenizer-resolution bug
+        # with newer transformers versions for SigLIP2.
+        self.processor = SiglipProcessor.from_pretrained(model_id)
+        self.model = SiglipModel.from_pretrained(model_id, torch_dtype=torch.float16).to("cuda")
         self.model.eval()
 
         print("[SigLIP2] Pre-computing triage text embeddings...")

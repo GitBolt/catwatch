@@ -21,14 +21,6 @@ yolo_image = (
     .run_function(_download_yolo)
 )
 
-whisper_image = (
-    modal.Image.debian_slim(python_version="3.11")
-    .apt_install("ffmpeg")
-    .pip_install(
-        "torch", "transformers",
-        "Pillow", "numpy", "accelerate",
-    )
-)
 
 qwen_image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -41,7 +33,8 @@ qwen_image = (
 siglip_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
-        "torch", "torchvision", "transformers",
+        "torch", "torchvision",
+        "transformers==4.46.3",  # pin: 4.47+ has tokenizer-resolution bug with SigLIP2
         "Pillow", "numpy", "chromadb",
     )
 )

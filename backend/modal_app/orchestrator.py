@@ -9,7 +9,6 @@ import modal
 
 from . import app, web_image
 from .yolo_detector import YoloDetector
-from .whisper import WhisperTranscriber
 from .qwen_vl import Qwen25VLInspector
 from .siglip2 import SigLIP2PartsIdentifier
 
@@ -65,7 +64,6 @@ def web():
     api = FastAPI()
 
     yolo = YoloDetector()
-    whisper = WhisperTranscriber()
     qwen = Qwen25VLInspector()
     siglip2 = SigLIP2PartsIdentifier()
 
@@ -518,9 +516,6 @@ def web():
                     else:
                         pending_frame = None
                         asyncio.create_task(process_yolo(frame_b64, frame_id, frame_client_ts))
-
-                elif msg_type == "audio":
-                    pass
 
                 elif msg_type == "sensor":
                     sensor_snapshot = msg.get("data", {})

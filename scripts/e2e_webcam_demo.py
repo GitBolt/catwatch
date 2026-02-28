@@ -820,11 +820,6 @@ async def ws_loop(url, unit_info, spec_kb):
                     last_sent_frame_id = fid
                     send_count += 1
 
-                audio = shared.get("audio_b64")
-                if audio:
-                    await ws.send(json.dumps({"type": "audio", "data": audio}))
-                    shared["audio_b64"] = None
-
                 with shared_lock:
                     actions = shared["pending_actions"][:]
                     shared["pending_actions"] = []
@@ -939,11 +934,6 @@ async def ws_loop(url, unit_info, spec_kb):
                 elif t == "zone_first_seen":
                     zone_id = msg.get("zone")
                     print(f"  ** zone_first_seen: {zone_id} **")
-
-                elif t == "transcript":
-                    text = msg.get("text", "")
-                    shared["transcript"] = text
-                    print(f"  transcript: {text}")
 
                 elif t == "finding":
                     finding = msg.get("data", {})
@@ -1275,6 +1265,7 @@ def main():
     frame_id = 0
     cat_color_counter = 0
     cat_was_visible = False
+    cat_announce_ts = 0.0
 
     try:
         while True:
@@ -1316,9 +1307,10 @@ def main():
             if cat_color_counter % 10 == 0:
                 cat_now = detect_cat_colors(frame)
                 shared["cat_visible"] = cat_now
-                if cat_now and not cat_was_visible:
+                if cat_now and not cat_was_visible and (now - cat_announce_ts) > 30.0:
                     print("  ** CAT equipment detected (yellow+black) **")
                     speak("CAT equipment in view.")
+                    cat_announce_ts = now
                 cat_was_visible = cat_now
 
             utterance = voice.get_utterance()
@@ -1330,7 +1322,7 @@ def main():
                         daemon=True,
                     ).start()
                 else:
-                    shared["audio_b64"] = base64.b64encode(utterance.tobytes()).decode("utf-8")
+                    print("[audio] local whisper not available — utterance dropped")
 
             det_age_s = now - shared.get("last_detection_ts", 0.0)
             live_detections = [
