@@ -8,8 +8,7 @@ import time
 import cv2
 import numpy as np
 
-from .constants import ALL_ZONES, HIGH_ANOMALY_THRESHOLD, ZONE_COLORS
-from .detection import iou
+from .constants import ALL_ZONES, ZONE_COLORS
 
 
 class HUD:
@@ -31,7 +30,6 @@ class HUD:
         self.det_age_ms      = 0
         self.dropped_frames  = 0
         self.mic_active      = False
-        self.mic_muted       = False
         self.transcript      = ""
         self.findings        = []
         self.brief_text      = ""
@@ -45,10 +43,8 @@ class HUD:
         self.vlm_description = ""
         self.vlm_findings    = []
         self.mode            = "general"
-        # Tier 2 triage
-        self.triage_boxes       = []   # [{bbox, is_flagged, anomaly_score}]
-        self.anomaly_flash_boxes = []  # [{bbox, ts, score, label, top_anomaly}]
-        self.t2_ms              = 0
+        # Push-to-talk
+        self.ptt_recording      = False
 
     def render(self, frame, tracks, zone_status, coverage_pct, completed_zones, confirmed_zones):
         h, w = frame.shape[:2]
@@ -57,51 +53,28 @@ class HUD:
         self._draw_zone_panel(frame, zone_status, coverage_pct, completed_zones, confirmed_zones, w, h)
         self._draw_vlm_panel(frame)
         self._draw_bottom_panel(frame, w, h)
+        if self.ptt_recording:
+            self._draw_recording_overlay(frame, w, h)
         return frame
 
     # ── Detection boxes ──────────────────────────────────────────────────────
 
     def _draw_detection_boxes(self, frame, tracks, zone_status, w, h):
-        now = time.time()
         for t in tracks:
-            bx        = t.bbox
-            x1, y1    = int(bx[0] * w), int(bx[1] * h)
-            x2, y2    = int(bx[2] * w), int(bx[3] * h)
-            bbox_list = bx.tolist() if hasattr(bx, "tolist") else list(bx)
+            bx     = t.bbox
+            x1, y1 = int(bx[0] * w), int(bx[1] * h)
+            x2, y2 = int(bx[2] * w), int(bx[3] * h)
 
-            color, thickness = self._box_color(bbox_list, t, zone_status)
+            zone      = t.zone or ""
+            rating    = zone_status.get(zone, "GRAY") if zone else "GRAY"
+            color     = ZONE_COLORS.get(rating, (255, 255, 255))
+            thickness = 2 if rating in ("GREEN", "GRAY") else 3
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
 
-            self._draw_anomaly_flash(frame, bbox_list, x1, y1, x2, y2, now)
-
             conf_str = f"{t.confidence:.0%}" if t.confidence else ""
-            zone     = t.zone or ""
             label    = f"{t.label} {conf_str}" + (f" [{zone}]" if zone else "")
             cv2.putText(frame, label, (x1, max(y1 - 6, 14)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.42, color, 1, cv2.LINE_AA)
-
-    def _box_color(self, bbox_list, track, zone_status):
-        """Tier 2 triage result takes priority over zone_status coloring."""
-        for tb in self.triage_boxes:
-            if iou(bbox_list, tb.get("bbox", [])) > 0.25:
-                if tb.get("is_flagged"):
-                    color = (0, 0, 220) if tb.get("anomaly_score", 0) > HIGH_ANOMALY_THRESHOLD else (0, 200, 255)
-                    return color, 3
-                break
-        zone      = track.zone or ""
-        rating    = zone_status.get(zone, "GRAY") if zone else "GRAY"
-        color     = ZONE_COLORS.get(rating, (255, 255, 255))
-        thickness = 2 if rating in ("GREEN", "GRAY") else 3
-        return color, thickness
-
-    def _draw_anomaly_flash(self, frame, bbox_list, x1, y1, x2, y2, now):
-        """Pulsing cyan border for detections flagged by Tier 2 in the last 3 seconds."""
-        for fb in self.anomaly_flash_boxes:
-            if iou(bbox_list, fb.get("bbox", [])) > 0.25:
-                age = now - fb.get("ts", 0)
-                if age < 3.0 and int(age * 4) % 2 == 0:
-                    cv2.rectangle(frame, (x1 - 3, y1 - 3), (x2 + 3, y2 + 3), (0, 255, 255), 4)
-                break
 
     # ── Top bar ──────────────────────────────────────────────────────────────
 
@@ -114,13 +87,13 @@ class HUD:
         ws_color = (0, 200, 0) if self.ws_connected else (0, 0, 220)
         cv2.circle(frame, (w - 260, 18), 5, ws_color, -1)
         latency = (
-            f"WS {self.ws_latency_ms}ms | YOLO {self.yolo_ms}ms | T2 {self.t2_ms}ms | "
+            f"WS {self.ws_latency_ms}ms | YOLO {self.yolo_ms}ms | "
             f"S/R {self.send_fps:.1f}/{self.recv_fps:.1f} | Age {self.det_age_ms}ms | Drop {self.dropped_frames}"
         )
         cv2.putText(frame, latency, (w - 250, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.36, (200, 200, 200), 1, cv2.LINE_AA)
 
-        mic_color = (0, 200, 0) if (self.mic_active and not self.mic_muted) else (100, 100, 100)
-        mic_label = "MUTE" if self.mic_muted else ("MIC" if self.mic_active else "NO MIC")
+        mic_color = (0, 200, 0) if self.mic_active else (100, 100, 100)
+        mic_label = "PTT" if self.mic_active else "NO MIC"
         cv2.circle(frame, (w - 60, 18), 5, mic_color, -1)
         cv2.putText(frame, mic_label, (w - 50, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (200, 200, 200), 1, cv2.LINE_AA)
 
@@ -193,8 +166,27 @@ class HUD:
             cv2.putText(frame, f"BRIEF [{self.brief_zone}]: {self.brief_text[:80]}", (8, ly),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.36, (100, 255, 255), 1, cv2.LINE_AA)
 
-        cv2.putText(frame, "[g]General [c]CAT [r]Report [e]Evidence [p]PartID [m]Mute [q]Quit",
+        cv2.putText(frame, "[g]General [c]CAT [r]Report [e]Evidence [Space]PTT [q]Quit",
                     (8, h - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.36, (140, 140, 140), 1, cv2.LINE_AA)
+
+    # ── Recording overlay ─────────────────────────────────────────────────────
+
+    @staticmethod
+    def _draw_recording_overlay(frame, w, h):
+        """Pulsing red border + REC banner shown while PTT is active."""
+        pulse = int(time.time() * 3) % 2 == 0
+        border_color = (0, 0, 220) if pulse else (0, 0, 150)
+        thickness = 6
+        cv2.rectangle(frame, (0, 0), (w - 1, h - 1), border_color, thickness)
+
+        # Semi-transparent dark banner at top-centre
+        bx, by, bw, bh = w // 2 - 90, 40, 180, 36
+        by2 = min(by + bh, h)
+        frame[by:by2, bx:bx + bw] = (frame[by:by2, bx:bx + bw] * 0.35).astype(np.uint8)
+        dot_color = (0, 0, 230) if pulse else (0, 0, 170)
+        cv2.circle(frame, (bx + 18, by + 18), 8, dot_color, -1)
+        cv2.putText(frame, "RECORDING", (bx + 30, by + 24),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
 
     # ── Utility ──────────────────────────────────────────────────────────────
 

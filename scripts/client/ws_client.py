@@ -36,7 +36,6 @@ shared = {
     "brief_zone":               "",
     "brief_time":               0,
     "spec_text":                "",
-    "parts":                    [],
     "report":                   None,
     "auto_evidence":            False,
     "ws_connected":             False,
@@ -58,12 +57,6 @@ shared = {
     "last_analysis_ts":         0.0,
     "last_analysis_frame_id":   -1,
     "inspection_mode":          "general",
-    # Tier 2 triage
-    "triage_boxes":             [],
-    "triage_boxes_ts":          0.0,
-    "anomaly_flash_boxes":      [],
-    "t2_ms":                    0,
-    "anomaly_callout_ts":       0.0,
 }
 
 
@@ -95,6 +88,16 @@ async def ws_loop(url, unit_info, spec_kb):
         async def sender_loop():
             nonlocal send_count, recv_count, last_metrics_ts, last_sent_frame_id
             while True:
+                with shared_lock:
+                    actions = shared["pending_actions"][:]
+                    shared["pending_actions"] = []
+
+                # Voice questions go first — before any frame — for minimum latency
+                voice_actions = [(k, v) for k, v in actions if k == "voice_question"]
+                other_actions = [(k, v) for k, v in actions if k != "voice_question"]
+                for _, payload in voice_actions:
+                    await ws.send(json.dumps(payload))
+
                 packet = shared.get("frame_packet")
                 if packet and packet["frame_id"] > last_sent_frame_id:
                     fid = packet["frame_id"]
@@ -109,10 +112,7 @@ async def ws_loop(url, unit_info, spec_kb):
                     last_sent_frame_id = fid
                     send_count += 1
 
-                with shared_lock:
-                    actions = shared["pending_actions"][:]
-                    shared["pending_actions"] = []
-                for _, payload in actions:
+                for _, payload in other_actions:
                     await ws.send(json.dumps(payload))
 
                 now = time.time()
@@ -156,19 +156,8 @@ async def ws_loop(url, unit_info, spec_kb):
                     shared["spec_text"] = msg.get("result", "")
                     print(f"  spec [{msg.get('zone')}]: {msg.get('result','')[:80]}")
 
-                elif t == "parts_result":
-                    shared["parts"] = msg.get("parts", [])
-                    for p in shared["parts"][:3]:
-                        print(f"  part: {p.get('part_number','?')} — {p.get('description','')[:40]} ({p.get('certainty_pct',0)}%)")
-
                 elif t == "voice_answer":
                     _on_voice_answer(msg)
-
-                elif t == "anomaly_flag":
-                    _on_anomaly_flag(msg)
-
-                elif t == "triage_summary":
-                    _on_triage_summary(msg)
 
                 elif t == "mode":
                     shared["inspection_mode"] = msg.get("mode", "general")
@@ -346,50 +335,3 @@ def _on_voice_answer(msg):
     speak((first_sent + ".") if first_sent else answer[:80])
 
 
-def _on_anomaly_flag(msg):
-    bbox        = msg.get("bbox", [])
-    label       = msg.get("label", "")
-    top_anomaly = msg.get("top_anomaly_match", "")
-    score       = msg.get("anomaly_score", 0.0)
-    now_t       = time.time()
-
-    with shared_lock:
-        shared["anomaly_flash_boxes"].append({
-            "bbox": bbox, "ts": now_t, "score": score,
-            "label": label, "top_anomaly": top_anomaly,
-        })
-        shared["anomaly_flash_boxes"] = [
-            b for b in shared["anomaly_flash_boxes"] if now_t - b["ts"] < 4.0
-        ]
-
-    print(f"  [T2 FLAG] {label}: {top_anomaly} (score={score:.3f})")
-    if now_t - shared.get("anomaly_callout_ts", 0.0) > CALLOUT_COOLDOWN_S:
-        shared["anomaly_callout_ts"] = now_t
-        _part = label.replace("_", " ") if label else ""
-        if top_anomaly and _part and top_anomaly.lower() not in _part.lower():
-            speak(f"{_part} — {top_anomaly}")
-        elif top_anomaly:
-            speak(top_anomaly)
-        elif _part:
-            speak(f"Anomaly on {_part}")
-
-
-def _on_triage_summary(msg):
-    results = msg.get("results", [])
-    t2_ms   = msg.get("t2_ms", 0)
-    shared["t2_ms"] = t2_ms
-    with shared_lock:
-        shared["triage_boxes"] = [
-            {
-                "bbox":              r["bbox"],
-                "is_flagged":        r.get("is_flagged", False),
-                "anomaly_score":     r.get("anomaly_score", 0.0),
-                "top_anomaly_match": r.get("top_anomaly_match", ""),
-            }
-            for r in results if "bbox" in r
-        ]
-        shared["triage_boxes_ts"] = time.time()
-    flagged = msg.get("flagged_count", 0)
-    total   = msg.get("total_detections", 0)
-    if total > 0:
-        print(f"  [T2] {flagged}/{total} flagged | {t2_ms}ms")

@@ -1,47 +1,53 @@
 """
-YOLOv10 training pipeline for Dronecat construction equipment detector.
+YOLOv8 component-level training pipeline for CAT equipment inspection.
 
-Downloads the RF100 Excavators dataset (Excavator, Dump Truck, Wheel Loader)
-from Roboflow, trains YOLOv10n on Modal A100, and saves weights to the
-shared 'dronecat-models' volume where YoloDetector will pick them up automatically.
+Trains on a pre-uploaded dataset from the Modal volume (uploaded via
+scripts/upload_dataset.py) or downloads from Roboflow as fallback.
 
 Setup:
-    1. Get a free Roboflow API key at https://app.roboflow.com
-    2. Create a Modal secret:
-           modal secret create roboflow-api-key ROBOFLOW_API_KEY=<your_key>
-    3. Run training:
-           modal run backend/modal_app/train_yolo.py
-    4. After training, download weights:
-           python scripts/get_trained_model.py
-    5. Redeploy:
-           modal deploy modal_deploy.py
+    1. Prepare data:    python scripts/prepare_training_data.py --roboflow
+    2. Upload data:     python scripts/upload_dataset.py
+    3. Train:           modal run backend/modal_app/train_yolo.py
+    4. Download weights: python scripts/get_trained_model.py
+    5. Redeploy:        modal deploy modal_deploy.py
+
+Options:
+    modal run backend/modal_app/train_yolo.py --epochs 150 --model-size s --imgsz 640
+    modal run backend/modal_app/train_yolo.py --model-size m --imgsz 640 --batch 32
 """
 
 import modal
 
-# Separate app so training never touches the live inference deployment.
 training_app = modal.App("dronecat-training")
 
-# Same volume name as in __init__.py — Modal resolves by name, no import needed.
 models_volume = modal.Volume.from_name("dronecat-models", create_if_missing=True)
 
-# Unified class list written into data.yaml and classes.json in the volume.
-UNIFIED_CLASSES = ["excavator", "dump_truck", "loader", "crane", "dozer"]
-
-# Maps source dataset class names → unified names (None = discard).
-# Keys are lowercased — lookup normalizes before matching.
-_CLASS_MAP = {
-    # RF100 excavators dataset
-    "excavators": "excavator",
-    "excavator": "excavator",
-    "dump truck": "dump_truck",
-    "wheel loader": "loader",
-    # Pictor-v2 (add later)
-    "truck": "dump_truck",
-    "crane": "crane",
-    "dozer": "dozer",
-    "other": None,
-}
+COMPONENT_CLASSES = [
+    "track_roller",
+    "track_shoe",
+    "sprocket",
+    "idler",
+    "track_chain",
+    "final_drive",
+    "hydraulic_hose",
+    "hydraulic_cylinder",
+    "bucket",
+    "bucket_teeth",
+    "cutting_edge",
+    "boom",
+    "stick",
+    "cab",
+    "cab_glass",
+    "step",
+    "handrail",
+    "radiator",
+    "engine_compartment",
+    "exhaust",
+    "tire",
+    "rim",
+    "coupler",
+    "excavator",
+]
 
 _train_image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -55,41 +61,58 @@ _train_image = (
         "Pillow",
         "pyyaml",
         "opencv-python-headless",
+        "albumentations",
     )
 )
 
 
-@training_app.function(
-    gpu="A100",
-    image=_train_image,
-    volumes={"/models": models_volume},
-    timeout=7200,
-    secrets=[modal.Secret.from_name("roboflow-api-key")],
-)
-def train(epochs: int = 100, model_size: str = "n", imgsz: int = 640, batch: int = 64):
-    import json
-    import os
+def _load_volume_dataset(models_path):
+    """Copy the pre-uploaded dataset from the Modal volume to /tmp for training."""
+    import shutil
+    from pathlib import Path
+
+    src = Path(models_path) / "dataset"
+    dst = Path("/tmp/training/dataset")
+
+    if not src.exists():
+        return None
+
+    yaml_file = src / "data.yaml"
+    if not yaml_file.exists():
+        return None
+
+    print("[DATA] Found pre-uploaded dataset on volume. Copying to /tmp...")
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(str(src), str(dst))
+
+    import yaml
+    with open(dst / "data.yaml") as f:
+        meta = yaml.safe_load(f)
+    meta["path"] = str(dst)
+    with open(dst / "data.yaml", "w") as f:
+        yaml.dump(meta, f)
+
+    n_train = len(list((dst / "images" / "train").glob("*"))) if (dst / "images" / "train").exists() else 0
+    n_val = len(list((dst / "images" / "val").glob("*"))) if (dst / "images" / "val").exists() else 0
+    print(f"[DATA] Volume dataset: {n_train} train, {n_val} val images")
+    return dst / "data.yaml"
+
+
+def _download_roboflow_fallback(rf_key):
+    """Fallback: download from Roboflow if no volume dataset exists."""
     import shutil
     import yaml
     from pathlib import Path
-    from ultralytics import YOLO
-
-    rf_key = os.environ.get("ROBOFLOW_API_KEY", "")
-    if not rf_key:
-        raise RuntimeError(
-            "ROBOFLOW_API_KEY not found. Create a Modal secret:\n"
-            "  modal secret create roboflow-api-key ROBOFLOW_API_KEY=<your_key>"
-        )
+    from roboflow import Roboflow
 
     work_dir = Path("/tmp/training")
     dataset_dir = work_dir / "dataset"
-    for split in ("train", "val", "test"):
+    for split in ("train", "val"):
         (dataset_dir / "images" / split).mkdir(parents=True, exist_ok=True)
         (dataset_dir / "labels" / split).mkdir(parents=True, exist_ok=True)
 
-    # ── Download RF100 excavators ────────────────────────────────────────────
-    print("[DATA] Downloading RF100 excavators from Roboflow...")
-    from roboflow import Roboflow
+    print("[DATA] No volume dataset found. Downloading from Roboflow...")
     rf = Roboflow(api_key=rf_key)
     proj = rf.workspace("mohamed-sabek-6zmr6").project("excavators-cwlh0")
     dl = proj.version(4).download("yolov8", location=str(work_dir / "rf100"))
@@ -98,107 +121,206 @@ def train(epochs: int = 100, model_size: str = "n", imgsz: int = 640, batch: int
     with open(rf_dir / "data.yaml") as f:
         rf_yaml = yaml.safe_load(f)
     rf_classes = rf_yaml.get("names", [])
-    print(f"[DATA] RF100 classes: {rf_classes}")
+    if isinstance(rf_classes, dict):
+        rf_classes = [rf_classes[k] for k in sorted(rf_classes.keys())]
 
-    # ── Class remapping helpers ───────────────────────────────────────────────
-    def build_remap(src_classes):
-        remap = {}
-        for i, name in enumerate(src_classes):
-            unified = _CLASS_MAP.get(name.lower().strip())
-            remap[i] = UNIFIED_CLASSES.index(unified) if unified in UNIFIED_CLASSES else None
-        return remap
+    CLASS_REMAP = {
+        "excavators": "excavator", "excavator": "excavator",
+        "dump truck": None, "wheel loader": None,
+        "truck": None, "crane": None, "dozer": None,
+    }
 
-    def remap_label_file(src_path, dst_path, remap):
-        lines = []
-        for line in src_path.read_text().strip().splitlines():
-            if not line:
-                continue
-            parts = line.split()
-            dst_cls = remap.get(int(parts[0]))
-            if dst_cls is not None:
-                lines.append(f"{dst_cls} {' '.join(parts[1:])}")
-        if lines:
-            dst_path.write_text("\n".join(lines) + "\n")
+    remap = {}
+    for i, name in enumerate(rf_classes):
+        unified = CLASS_REMAP.get(name.lower().strip())
+        if unified and unified in COMPONENT_CLASSES:
+            remap[i] = COMPONENT_CLASSES.index(unified)
 
-    def copy_split(src_root, src_split, dst_split, remap):
-        img_src = src_root / src_split / "images"
-        lbl_src = src_root / src_split / "labels"
+    count = 0
+    for src_split, dst_split in [("train", "train"), ("valid", "val"), ("test", "val")]:
+        img_src = rf_dir / src_split / "images"
+        lbl_src = rf_dir / src_split / "labels"
         if not img_src.exists():
-            return 0
-        count = 0
+            continue
         for img in img_src.iterdir():
             lbl = lbl_src / img.with_suffix(".txt").name
             if not lbl.exists():
                 continue
-            has_valid = any(
-                remap.get(int(ln.split()[0])) is not None
-                for ln in lbl.read_text().strip().splitlines() if ln
-            )
-            if has_valid:
+            lines = []
+            for line in lbl.read_text().strip().splitlines():
+                if not line:
+                    continue
+                parts = line.split()
+                dst_cls = remap.get(int(parts[0]))
+                if dst_cls is not None:
+                    lines.append(f"{dst_cls} {' '.join(parts[1:])}")
+            if lines:
                 shutil.copy(img, dataset_dir / "images" / dst_split / img.name)
-                remap_label_file(lbl, dataset_dir / "labels" / dst_split / lbl.name, remap)
+                (dataset_dir / "labels" / dst_split / img.with_suffix(".txt").name).write_text("\n".join(lines) + "\n")
                 count += 1
-        return count
 
-    rf_remap = build_remap(rf_classes)
-    n_train = copy_split(rf_dir, "train", "train", rf_remap)
-    n_val   = copy_split(rf_dir, "valid", "val",   rf_remap)
-    n_test  = copy_split(rf_dir, "test",  "test",  rf_remap)
-    print(f"[DATA] RF100 → train:{n_train}  val:{n_val}  test:{n_test}")
+    print(f"[DATA] Roboflow fallback: {count} images (excavator class only)")
 
-    if n_train == 0:
-        raise RuntimeError("No training images after remapping. Check RF100 dataset version/classes.")
-
-    # ── Write data.yaml ───────────────────────────────────────────────────────
     yaml_path = dataset_dir / "data.yaml"
     with open(yaml_path, "w") as f:
         yaml.dump({
             "path": str(dataset_dir),
             "train": "images/train",
             "val": "images/val",
-            "test": "images/test",
-            "nc": len(UNIFIED_CLASSES),
-            "names": UNIFIED_CLASSES,
+            "nc": len(COMPONENT_CLASSES),
+            "names": COMPONENT_CLASSES,
         }, f)
-    print(f"[DATA] data.yaml written: {UNIFIED_CLASSES}")
 
-    # ── Train ─────────────────────────────────────────────────────────────────
-    print(f"[TRAIN] YOLOv10{model_size}  epochs={epochs}  imgsz={imgsz}  batch={batch}")
-    model = YOLO(f"yolov10{model_size}.pt")
+    return yaml_path
+
+
+@training_app.function(
+    gpu="H100",
+    image=_train_image,
+    volumes={"/models": models_volume},
+    timeout=14400,
+    secrets=[],
+)
+def train(
+    epochs: int = 150,
+    model_size: str = "s",
+    imgsz: int = 640,
+    batch: int = 48,
+    freeze_epochs: int = 10,
+    patience: int = 30,
+):
+    import json
+    import os
+    import shutil
+    from pathlib import Path
+    from ultralytics import YOLO
+
+    # ── Load dataset (volume first, Roboflow fallback) ────────────────────
+    yaml_path = _load_volume_dataset("/models")
+    if yaml_path is None:
+        rf_key = os.environ.get("ROBOFLOW_API_KEY", "")
+        if not rf_key:
+            raise RuntimeError(
+                "No dataset on volume and no ROBOFLOW_API_KEY.\n"
+                "Either upload a dataset: python scripts/upload_dataset.py\n"
+                "Or set: modal secret create roboflow-api-key ROBOFLOW_API_KEY=<key>"
+            )
+        yaml_path = _download_roboflow_fallback(rf_key)
+
+    # ── Phase 1: Frozen backbone (transfer learning) ──────────────────────
+    model_name = f"yolov8{model_size}.pt"
+    print(f"\n[TRAIN] Phase 1: Frozen backbone — {model_name}, {freeze_epochs} epochs, imgsz={imgsz}")
+    model = YOLO(model_name)
+
+    if freeze_epochs > 0:
+        model.train(
+            data=str(yaml_path),
+            epochs=freeze_epochs,
+            imgsz=imgsz,
+            batch=batch,
+            freeze=10,
+            project="/tmp/runs",
+            name="dronecat_frozen",
+            patience=freeze_epochs,
+            cache=True,
+            save=True,
+            verbose=True,
+            lr0=0.01,
+            lrf=0.1,
+            warmup_epochs=3,
+            mosaic=1.0,
+            mixup=0.1,
+            copy_paste=0.1,
+            degrees=15.0,
+            scale=0.5,
+            fliplr=0.5,
+            hsv_h=0.015,
+            hsv_s=0.5,
+            hsv_v=0.3,
+        )
+        frozen_best = Path("/tmp/runs/dronecat_frozen/weights/best.pt")
+        if frozen_best.exists():
+            model = YOLO(str(frozen_best))
+            print("[TRAIN] Phase 1 complete. Loading best frozen checkpoint.")
+        else:
+            print("[TRAIN] Phase 1 produced no checkpoint — continuing with base model.")
+
+    # ── Phase 2: Full fine-tune ───────────────────────────────────────────
+    remaining = epochs - freeze_epochs
+    print(f"\n[TRAIN] Phase 2: Full fine-tune — {remaining} epochs")
     results = model.train(
         data=str(yaml_path),
-        epochs=epochs,
+        epochs=remaining,
         imgsz=imgsz,
         batch=batch,
         project="/tmp/runs",
-        name="dronecat_v1",
-        patience=20,
+        name="dronecat_components",
+        patience=patience,
         cache=True,
         save=True,
         verbose=True,
+        lr0=0.001,
+        lrf=0.01,
+        warmup_epochs=3,
+        mosaic=1.0,
+        mixup=0.15,
+        copy_paste=0.15,
+        degrees=10.0,
+        scale=0.5,
+        translate=0.2,
+        fliplr=0.5,
+        hsv_h=0.015,
+        hsv_s=0.5,
+        hsv_v=0.3,
+        cls=0.5,
+        box=7.5,
+        dfl=1.5,
     )
 
-    # ── Save weights to volume ────────────────────────────────────────────────
+    # ── Save weights to volume ────────────────────────────────────────────
     models_path = Path("/models")
-    best = Path("/tmp/runs/dronecat_v1/weights/best.pt")
-    last = Path("/tmp/runs/dronecat_v1/weights/last.pt")
+    best = Path("/tmp/runs/dronecat_components/weights/best.pt")
+    last = Path("/tmp/runs/dronecat_components/weights/last.pt")
 
     if best.exists():
         shutil.copy(best, models_path / "dronecat_yolo_best.pt")
-        print("[TRAIN] Saved dronecat_yolo_best.pt to volume.")
+        print("[SAVE] dronecat_yolo_best.pt → volume")
     if last.exists():
         shutil.copy(last, models_path / "dronecat_yolo_last.pt")
+        print("[SAVE] dronecat_yolo_last.pt → volume")
 
-    (models_path / "classes.json").write_text(json.dumps(UNIFIED_CLASSES))
+    (models_path / "classes.json").write_text(json.dumps(COMPONENT_CLASSES))
+    print("[SAVE] classes.json → volume")
     models_volume.commit()
 
     map50 = results.results_dict.get("metrics/mAP50(B)", 0)
-    print(f"[TRAIN] Done. mAP50={map50:.3f}")
-    print("[TRAIN] Next: python scripts/get_trained_model.py  &&  modal deploy modal_deploy.py")
-    return {"map50": map50, "classes": UNIFIED_CLASSES}
+    map50_95 = results.results_dict.get("metrics/mAP50-95(B)", 0)
+    print(f"\n[DONE] mAP50={map50:.3f}  mAP50-95={map50_95:.3f}")
+    print(f"[DONE] Classes: {COMPONENT_CLASSES}")
+    print("[NEXT] python scripts/get_trained_model.py && modal deploy modal_deploy.py")
+
+    return {
+        "map50": map50,
+        "map50_95": map50_95,
+        "classes": COMPONENT_CLASSES,
+        "epochs": epochs,
+        "model_size": model_size,
+    }
 
 
 @training_app.local_entrypoint()
-def main(epochs: int = 100, model_size: str = "n"):
-    result = train.remote(epochs=epochs, model_size=model_size)
+def main(
+    epochs: int = 150,
+    model_size: str = "s",
+    imgsz: int = 640,
+    batch: int = 48,
+    freeze_epochs: int = 10,
+):
+    result = train.remote(
+        epochs=epochs,
+        model_size=model_size,
+        imgsz=imgsz,
+        batch=batch,
+        freeze_epochs=freeze_epochs,
+    )
     print(f"\nResult: {result}")

@@ -30,16 +30,6 @@ qwen_image = (
     )
 )
 
-siglip_image = (
-    modal.Image.debian_slim(python_version="3.11")
-    .pip_install(
-        "torch", "torchvision",
-        "transformers==4.46.3",  # pin: 4.47+ has tokenizer-resolution bug with SigLIP2
-        "sentencepiece",         # required by SiglipTokenizer
-        "Pillow", "numpy", "chromadb",
-    )
-)
-
 web_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(

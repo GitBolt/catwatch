@@ -18,7 +18,6 @@ TRACK_MAX_AGE   = 8
 DETECTION_TTL_S       = 1.2   # drop live_detections when YOLO result is older than this
 ANALYSIS_TTL_S        = 8.0   # clear VLM callout after this many seconds
 CALLOUT_COOLDOWN_S    = 5.0   # minimum gap between repeated voice callouts
-HIGH_ANOMALY_THRESHOLD = 0.15  # anomaly_score above this → red border (vs yellow)
 LABEL_UNSEEN_TIMEOUT_S = 20.0  # label can be re-announced after this many seconds absent
 
 # COCO labels irrelevant to CAT inspection — suppressed from display and terminal

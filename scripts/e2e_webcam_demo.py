@@ -6,7 +6,7 @@ Dronecat inspection client — YOLO + async VLM + voice I/O.
   python3 scripts/e2e_webcam_demo.py
   python3 scripts/e2e_webcam_demo.py --url wss://... --serial CAT0325F4K01847
 
-Keys: [g] General  [c] CAT  [r] Report  [e] Evidence  [p] Part ID  [m] Mute mic  [q] Quit
+Keys: [g] General  [c] CAT  [r] Report  [e] Evidence  [Space] PTT  [q] Quit
 """
 
 import argparse
@@ -33,6 +33,10 @@ from client.detection import DetectionSmoother, blur_score, detect_cat_colors, m
 from client.hud       import HUD
 from client.session   import Session
 from client.ws_client import shared, shared_lock, start_ws_thread
+
+# Debounce state for Space PTT toggle (prevents key-repeat re-toggling on macOS)
+_last_space_ts  = 0.0
+_PTT_DEBOUNCE_S = 0.5
 
 
 # ── Startup helpers ──────────────────────────────────────────────────────────
@@ -111,15 +115,15 @@ def _maybe_send_frame(frame, gray, prev_gray, frame_id, last_send, args):
     return frame_id, last_send
 
 
-def _process_voice(voice, local_whisper, spec_kb):
-    """Transcribe any pending utterance and route it to the appropriate action."""
+def _process_voice(voice, local_whisper):
+    """Transcribe any pending utterance and act if the activation word is heard."""
     utterance = voice.get_utterance()
     if utterance is None:
         return
     if local_whisper:
         threading.Thread(
             target=handle_utterance,
-            args=(local_whisper, utterance, shared, shared_lock, spec_kb),
+            args=(local_whisper, utterance, shared, shared_lock),
             daemon=True,
         ).start()
     else:
@@ -143,14 +147,11 @@ def _announce_new_equipment(live_detections, now, announced_labels, label_last_s
 
     Each unique YOLO label is announced once when it first appears.  After
     LABEL_UNSEEN_TIMEOUT_S of absence it is forgotten and can be re-announced.
-    If the label already has a T2 anomaly flag, the anomaly is included in the callout.
     """
-    # Expire labels that have been absent long enough
     for lk in list(announced_labels):
         if now - label_last_seen.get(lk, 0) > LABEL_UNSEEN_TIMEOUT_S:
             del announced_labels[lk]
 
-    new_labels = []
     for d in live_detections:
         lbl = d.get("label", "").strip()
         if not lbl:
@@ -159,23 +160,9 @@ def _announce_new_equipment(live_detections, now, announced_labels, label_last_s
         label_last_seen[lk] = now
         if lk not in announced_labels:
             announced_labels[lk] = now
-            new_labels.append((lbl, d.get("zone"), lk))
-
-    if not new_labels:
-        return
-
-    # Prioritise labels that already have a T2 anomaly flag
-    flash_labels = {b["label"].lower() for b in shared.get("anomaly_flash_boxes", [])}
-    new_labels.sort(key=lambda x: 0 if x[2] in flash_labels else 1)
-
-    lbl, zone, lk = new_labels[0]
-    part_name  = (zone or lbl).replace("_", " ")
-    top_anomaly = next(
-        (b["top_anomaly"] for b in shared.get("anomaly_flash_boxes", [])
-         if b.get("label", "").lower() == lk),
-        "",
-    )
-    speak(f"{part_name} — {top_anomaly}" if top_anomaly else f"{part_name} in view")
+            part_name = (d.get("zone") or lbl).replace("_", " ")
+            speak(f"{part_name} in view")
+            break   # one announcement per tick
 
 
 def _expire_stale_analysis(now):
@@ -210,7 +197,7 @@ def _sync_hud(hud, voice, det_age_s, now):
     hud.det_age_ms      = int(det_age_s * 1000)
     hud.dropped_frames  = shared.get("dropped_frames", 0)
     hud.mic_active      = voice.running
-    hud.mic_muted       = voice.muted
+    hud.ptt_recording   = voice.ptt_recording
     hud.transcript      = shared.get("transcript", "")
     hud.findings        = shared.get("all_findings", [])
     hud.brief_text      = shared.get("brief_text", "")
@@ -222,16 +209,25 @@ def _sync_hud(hud, voice, det_age_s, now):
     hud.vlm_description = shared.get("vlm_description", "")
     hud.vlm_findings    = shared.get("vlm_findings", [])
     hud.mode            = shared.get("inspection_mode", "general")
-    triage_age          = now - shared.get("triage_boxes_ts", 0.0)
-    hud.triage_boxes    = shared.get("triage_boxes", []) if triage_age < DETECTION_TTL_S else []
-    hud.anomaly_flash_boxes = list(shared.get("anomaly_flash_boxes", []))
-    hud.t2_ms           = shared.get("t2_ms", 0)
 
 
 def _handle_keyboard(key, session, voice, unit_info, frame, coverage_pct):
     """Process a keypress. Returns True if the user requested quit."""
+    global _last_space_ts
+
     if key == ord("q"):
         return True
+
+    if key == ord(" "):
+        now = time.time()
+        if now - _last_space_ts >= _PTT_DEBOUNCE_S:
+            _last_space_ts = now
+            if voice.ptt_recording:
+                voice.stop_ptt()
+            elif voice.running:
+                voice.start_ptt()
+        return False
+
     if key == ord("g"):
         shared["inspection_mode"] = "general"
         with shared_lock:
@@ -245,31 +241,11 @@ def _handle_keyboard(key, session, voice, unit_info, frame, coverage_pct):
     elif key == ord("e"):
         fname = session.save_evidence(frame, "manual")
         print(f"  [evidence: {fname}]")
-    elif key == ord("m"):
-        voice.muted = not voice.muted
-        print(f"  mic {'muted' if voice.muted else 'unmuted'}")
-    elif key == ord("p"):
-        fb = shared.get("last_frame_b64")
-        if fb:
-            with shared_lock:
-                shared["pending_actions"].append(("part_id", {"type": "identify_part", "data": fb}))
-            print("  [requesting part ID...]")
     elif key == ord("r"):
         _queue_report(unit_info, coverage_pct)
         print("  [requesting report...]")
     return False
 
-
-def _handle_voice_controls(voice):
-    """Apply mute/unmute requests that arrived via voice command."""
-    if shared.get("voice_mute_request"):
-        shared["voice_mute_request"] = False
-        voice.muted = True
-        speak("Mic muted.")
-    if shared.get("voice_unmute_request"):
-        shared["voice_unmute_request"] = False
-        voice.muted = False
-        speak("Mic on.")
 
 
 def _handle_report_ready(session, coverage_pct):
@@ -325,7 +301,6 @@ def main():
     shared["inspection_mode"] = args.mode
     start_ws_thread(url, unit_info, spec_kb)
     voice.start()
-    hud.mic_active = voice.running
 
     cap = _open_camera(args.camera)
     cv2.namedWindow("Dronecat", cv2.WINDOW_NORMAL)
@@ -333,7 +308,8 @@ def main():
     print(f"Camera {args.camera} open. Connecting to {url}")
     print(f"Unit: {unit_info['model']} | {unit_info['serial']} | {unit_info['hours']}h")
     print(f"Mode: {shared['inspection_mode'].upper()}  |  Session: {session.dir}")
-    print("Keys: [g]General [c]CAT [r]Report [e]Evidence [p]PartID [m]Mute [q]Quit\n")
+    print("Keys: [g]General [c]CAT [r]Report [e]Evidence [Space]PTT [q]Quit")
+    print("Voice: press Space to start recording, press Space again to send\n")
     with shared_lock:
         shared["pending_actions"].append(("set_mode", {"type": "set_mode", "mode": shared["inspection_mode"]}))
 
@@ -362,7 +338,7 @@ def main():
             if cat_counter % 10 == 0:
                 shared["cat_visible"] = detect_cat_colors(frame)
 
-            _process_voice(voice, local_whisper, spec_kb)
+            _process_voice(voice, local_whisper)
 
             det_age_s, live_detections, tracks = _get_live_detections(smoother, now)
             _announce_new_equipment(live_detections, now, announced_labels, label_last_seen)
@@ -379,8 +355,6 @@ def main():
             display = hud.render(frame.copy(), tracks, shared.get("zone_status", {}),
                                  coverage_pct, completed_zones, confirmed_zones)
             cv2.imshow("Dronecat", display)
-
-            _handle_voice_controls(voice)
 
             if shared.get("quit_requested"):
                 break

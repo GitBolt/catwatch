@@ -126,6 +126,77 @@ def get_sub_section_prompt(prompt_key):
     return SYSTEM_PROMPT
 
 
+_ZONE_CRITERIA = {}
+for _zid, _info in _sub_section_data.get("prompts", {}).items():
+    if _info.get("red_criteria"):
+        _ZONE_CRITERIA[_zid] = {
+            "title": _info.get("title", _zid),
+            "red": _info["red_criteria"],
+            "yellow": _info.get("yellow_criteria", ""),
+            "green": _info.get("green_criteria", ""),
+        }
+
+
+def _condensed_zone_criteria(zone_id):
+    """Build a compact zone-inspection block from CATrack + spec KB data."""
+    from backend.zone_config import ZONE_PROMPT_MAP
+
+    prompt_key = ZONE_PROMPT_MAP.get(zone_id, "")
+    spec = _spec_kb.get(zone_id, {})
+
+    criteria = _ZONE_CRITERIA.get(prompt_key)
+    if criteria:
+        block = (
+            f"ZONE FOCUS: {zone_id} — {criteria['title']}\n"
+            f"RED: {criteria['red']}\n"
+            f"YELLOW: {criteria['yellow']}\n"
+            f"GREEN: {criteria['green']}\n"
+        )
+    elif spec:
+        failures = ", ".join(spec.get("failure_modes", []))
+        block = (
+            f"ZONE FOCUS: {zone_id}\n"
+            f"Spec: {spec['spec_text']}\n"
+            f"Known failure modes: {failures}\n"
+        )
+    else:
+        return ""
+
+    if spec:
+        block += f"Procedure: {spec.get('procedure', 'N/A')}\n"
+
+    block += (
+        "False positives to avoid: dirt/debris obscuring condition, "
+        "lighting shadows, normal operational clearances, previous maintenance marks."
+    )
+    return block
+
+
+def build_zone_inspection_prompt(zone_id, mode="cat"):
+    """Construct a (persona, schema) tuple with zone-specific CATrack criteria.
+
+    - If zone_id is known and mode is "cat", injects condensed RED/YELLOW/GREEN
+      criteria and SMCS codes into the prompt so the VLM applies the correct
+      inspection methodology for the visible area.
+    - Falls back to generic personas when zone is unknown or mode is "general".
+    """
+    if mode != "cat":
+        return GENERAL_SCENE_PERSONA, GENERAL_OUTPUT_SCHEMA
+
+    zone_block = _condensed_zone_criteria(zone_id) if zone_id else ""
+
+    if zone_block:
+        persona = (
+            f"{CAT_INSPECTION_PERSONA}\n\n"
+            f"--- CATrack Inspection Criteria ---\n{zone_block}"
+        )
+    else:
+        persona = CAT_INSPECTION_PERSONA
+
+    schema = VLM_OUTPUT_SCHEMA + "\n\n" + SMCS_CONTEXT
+    return persona, schema
+
+
 GENERAL_SCENE_PERSONA = """\
 You are a safety-focused visual copilot for field operations.
 Describe what is actually visible in the current frame and flag only notable
