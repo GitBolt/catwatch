@@ -12,7 +12,7 @@ export function FindingsList({ findings }: Props) {
     return (
       <div
         className="card"
-        style={{ textAlign: "center", fontSize: 12, color: "#4b5563" }}
+        style={{ textAlign: "center", fontSize: 12, color: "var(--text-dim)" }}
       >
         No findings yet
       </div>
@@ -30,6 +30,7 @@ export function FindingsList({ findings }: Props) {
           return (
             <div
               key={i}
+              className="finding-row"
               style={{
                 borderRadius: "var(--radius)",
                 border: `1px solid ${colors.border}`,
@@ -41,9 +42,9 @@ export function FindingsList({ findings }: Props) {
                 <span style={{ fontSize: 12, fontWeight: 700, color: colors.text }}>
                   {f.rating}
                 </span>
-                <span style={{ fontSize: 12, color: "#9ca3af" }}>{zoneLabel}</span>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{zoneLabel}</span>
               </div>
-              <p style={{ marginTop: 4, fontSize: 12, color: "#d1d5db" }}>{f.description}</p>
+              <p style={{ marginTop: 4, fontSize: 12, color: "var(--text-muted)" }}>{f.description}</p>
             </div>
           );
         })}

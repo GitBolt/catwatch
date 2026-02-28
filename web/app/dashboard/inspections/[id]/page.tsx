@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { SEVERITY_COLORS, ZONE_LABELS, type ZoneId } from "@/lib/constants";
 import Link from "next/link";
+import { DownloadPDFButton } from "@/components/download-pdf-button";
 
 export default async function InspectionDetailPage({
   params,
@@ -26,10 +27,10 @@ export default async function InspectionDetailPage({
 
   const duration = inspectionSession.endedAt
     ? Math.round(
-        (new Date(inspectionSession.endedAt).getTime() -
-          new Date(inspectionSession.createdAt).getTime()) /
-          60000,
-      )
+      (new Date(inspectionSession.endedAt).getTime() -
+        new Date(inspectionSession.createdAt).getTime()) /
+      60000,
+    )
     : null;
 
   return (
@@ -54,6 +55,28 @@ export default async function InspectionDetailPage({
         >
           {inspectionSession.status}
         </span>
+        <div style={{ marginLeft: "auto" }}>
+          <DownloadPDFButton
+            inspection={{
+              sessionId: inspectionSession.id,
+              mode: inspectionSession.mode,
+              status: inspectionSession.status,
+              createdAt: inspectionSession.createdAt.toISOString(),
+              endedAt: inspectionSession.endedAt?.toISOString() ?? null,
+              coveragePct: inspectionSession.coveragePct,
+              zonesSeen: inspectionSession.zonesSeen,
+              findings: inspectionSession.findings.map((f) => ({
+                zone: f.zone,
+                rating: f.rating,
+                description: f.description,
+                createdAt: f.createdAt.toISOString(),
+              })),
+              report: inspectionSession.report
+                ? { data: inspectionSession.report.data }
+                : null,
+            }}
+          />
+        </div>
       </div>
 
       {/* Metadata */}
@@ -95,6 +118,7 @@ export default async function InspectionDetailPage({
               return (
                 <div
                   key={f.id}
+                  className="finding-row"
                   style={{
                     borderRadius: "var(--radius)",
                     border: `1px solid ${colors.border}`,
@@ -111,7 +135,7 @@ export default async function InspectionDetailPage({
                       {new Date(f.createdAt).toLocaleTimeString()}
                     </span>
                   </div>
-                  <p style={{ marginTop: 4, fontSize: 14, color: "#d1d5db" }}>{f.description}</p>
+                  <p style={{ marginTop: 4, fontSize: 14, color: "var(--text-muted)" }}>{f.description}</p>
                 </div>
               );
             })}
@@ -124,7 +148,7 @@ export default async function InspectionDetailPage({
         <div>
           <h2 style={{ marginBottom: 16, fontSize: 18, fontWeight: 600 }}>Report</h2>
           <div className="card" style={{ padding: 24 }}>
-            <pre style={{ whiteSpace: "pre-wrap", fontSize: 14, color: "#d1d5db" }}>
+            <pre style={{ whiteSpace: "pre-wrap", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
               {typeof inspectionSession.report.data === "string"
                 ? inspectionSession.report.data
                 : JSON.stringify(inspectionSession.report.data, null, 2)}

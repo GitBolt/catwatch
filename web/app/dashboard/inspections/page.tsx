@@ -30,14 +30,14 @@ export default async function InspectionsPage() {
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           <table style={{ width: "100%", fontSize: 14, borderCollapse: "collapse" }}>
             <thead>
-              <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "left", fontSize: 12, color: "var(--text-dim)" }}>
-                <th style={{ padding: "12px 16px", fontWeight: 500 }}>Session</th>
-                <th style={{ padding: "12px 16px", fontWeight: 500 }}>Date</th>
-                <th style={{ padding: "12px 16px", fontWeight: 500 }}>Mode</th>
-                <th style={{ padding: "12px 16px", fontWeight: 500 }}>Duration</th>
-                <th style={{ padding: "12px 16px", fontWeight: 500 }}>Coverage</th>
-                <th style={{ padding: "12px 16px", fontWeight: 500 }}>Findings</th>
-                <th style={{ padding: "12px 16px", fontWeight: 500 }}>Status</th>
+              <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "left", fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                <th style={{ padding: "10px 16px", fontWeight: 500 }}>Session</th>
+                <th style={{ padding: "10px 16px", fontWeight: 500 }}>Date</th>
+                <th style={{ padding: "10px 16px", fontWeight: 500 }}>Mode</th>
+                <th style={{ padding: "10px 16px", fontWeight: 500 }}>Duration</th>
+                <th style={{ padding: "10px 16px", fontWeight: 500 }}>Coverage</th>
+                <th style={{ padding: "10px 16px", fontWeight: 500 }}>Findings</th>
+                <th style={{ padding: "10px 16px", fontWeight: 500 }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -60,7 +60,7 @@ export default async function InspectionsPage() {
                 return (
                   <tr
                     key={s.id}
-                    style={{ borderBottom: "1px solid rgba(31, 41, 55, 0.5)" }}
+                    style={{ borderBottom: "1px solid var(--border)" }}
                   >
                     <td style={{ padding: "12px 16px" }}>
                       <Link

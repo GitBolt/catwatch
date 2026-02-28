@@ -25,7 +25,7 @@ export default async function DashboardPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700 }}>Dashboard</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>Dashboard</h1>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
         <StatCard label="Total Inspections" value={totalSessions} />
@@ -63,7 +63,7 @@ export default async function DashboardPage() {
                     : `/dashboard/inspections/${s.id}`
                 }
                 className="card card-hover"
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", transition: "border-color 0.15s" }}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <span
@@ -94,9 +94,9 @@ export default async function DashboardPage() {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="card">
-      <div style={{ fontSize: 24, fontWeight: 700 }}>{value}</div>
-      <div style={{ fontSize: 14, color: "var(--text-muted)" }}>{label}</div>
+    <div className="card stat-card">
+      <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      <div style={{ marginTop: 4, fontSize: 13, color: "var(--text-muted)" }}>{label}</div>
     </div>
   );
 }

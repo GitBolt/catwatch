@@ -51,16 +51,18 @@ export default function LoginPage() {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: "100%", maxWidth: 380, padding: 32 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--amber)", marginBottom: 4 }}>
-          CatWatch
-        </h1>
-        <p style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 24 }}>
-          Equipment inspection platform
-        </p>
+      <div style={{ width: "100%", maxWidth: 360, padding: 32 }}>
+        <div style={{ marginBottom: 32 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--amber)", letterSpacing: "-0.02em", marginBottom: 6 }}>
+            CatWatch
+          </h1>
+          <p style={{ fontSize: 13, color: "var(--text-dim)" }}>
+            Equipment inspection platform
+          </p>
+        </div>
 
         <form onSubmit={handleSubmit}>
-          <label htmlFor="email" style={{ display: "block", fontSize: 14, fontWeight: 500, color: "var(--text-muted)", marginBottom: 6 }}>
+          <label htmlFor="email" style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-muted)", marginBottom: 6 }}>
             Email
           </label>
           <input
@@ -75,7 +77,7 @@ export default function LoginPage() {
           />
           {error && <div className="alert-error" style={{ marginBottom: 16 }}>{error}</div>}
           <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }}>
-            {loading ? "Verifying..." : "Sign in with email"}
+            {loading ? "Verifying..." : "Sign in"}
           </button>
         </form>
       </div>

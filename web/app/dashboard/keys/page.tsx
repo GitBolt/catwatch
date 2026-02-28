@@ -86,7 +86,7 @@ export default function KeysPage() {
           {keys.map((k) => (
             <div
               key={k.id}
-              className="card"
+              className="card key-row"
               style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
             >
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

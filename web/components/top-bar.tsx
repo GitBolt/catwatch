@@ -27,11 +27,12 @@ export function TopBar({
         alignItems: "center",
         justifyContent: "space-between",
         padding: "8px 16px",
-        background: "rgba(17, 24, 39, 0.5)",
+        background: "rgba(15, 15, 18, 0.8)",
+        backdropFilter: "blur(12px)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <span style={{ fontWeight: 700, color: "var(--amber)" }}>CatWatch</span>
+        <span style={{ fontWeight: 700, fontSize: 15, color: "var(--amber)", letterSpacing: "-0.02em" }}>CatWatch</span>
         <span className="mono" style={{ fontSize: 12, color: "var(--text-dim)" }}>
           {sessionId.slice(0, 8)}
         </span>
@@ -71,8 +72,8 @@ export function TopBar({
             style={{
               padding: "4px 12px",
               fontSize: 12,
-              background: mode === "cat" ? "#d97706" : "transparent",
-              color: mode === "cat" ? "#ffffff" : "var(--text-dim)",
+              background: mode === "cat" ? "var(--amber)" : "transparent",
+              color: mode === "cat" ? "#000" : "var(--text-dim)",
             }}
           >
             CAT

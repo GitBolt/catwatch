@@ -79,7 +79,7 @@ export default function LiveSessionPage() {
             flex: 1,
             overflow: "hidden",
             borderRadius: "var(--radius)",
-            background: "#111827",
+            background: "var(--bg-card)",
           }}
         >
           <VideoCanvas
@@ -132,7 +132,8 @@ export default function LiveSessionPage() {
           alignItems: "center",
           gap: 12,
           padding: "8px 16px",
-          background: "rgba(17, 24, 39, 0.5)",
+          background: "rgba(15, 15, 18, 0.8)",
+          backdropFilter: "blur(12px)",
         }}
       >
         <VoiceButton onQuestion={handleQuestion} />

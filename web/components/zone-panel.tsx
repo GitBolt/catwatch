@@ -20,11 +20,11 @@ export function ZonePanel({ zonesSeen, coverage }: Props) {
         {ALL_ZONES.map((zone) => {
           const seen = zonesSeen.has(zone);
           return (
-            <div key={zone} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+            <div key={zone} className="zone-row" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
               <span
                 className={seen ? "dot dot-green" : "dot dot-gray"}
               />
-              <span style={{ color: seen ? "#e5e7eb" : "#4b5563" }}>
+              <span style={{ color: seen ? "var(--text)" : "var(--text-dim)" }}>
                 {ZONE_LABELS[zone]}
               </span>
             </div>

@@ -41,31 +41,33 @@ export function AnalysisPanel({ analysis }: Props) {
             display: "inline-block",
             borderRadius: 4,
             padding: "2px 8px",
-            fontSize: 12,
-            fontWeight: 700,
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: "0.05em",
+            textTransform: "uppercase" as const,
             color: colors.text,
           }}
         >
           {sev}
         </span>
         {analysis.callout && (
-          <span style={{ fontSize: 14, fontWeight: 500, color: "#ffffff" }}>
+          <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text)" }}>
             {analysis.callout}
           </span>
         )}
       </div>
-      <p style={{ fontSize: 14, color: "#d1d5db" }}>{analysis.description}</p>
+      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>{analysis.description}</p>
       {analysis.findings.length > 0 && (
         <ul style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
           {analysis.findings.map((f, i) => (
-            <li key={i} style={{ fontSize: 12, color: "#9ca3af" }}>
+            <li key={i} style={{ fontSize: 12, color: "var(--text-muted)" }}>
               - {f}
             </li>
           ))}
         </ul>
       )}
       {analysis.zone && (
-        <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
+        <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-dim)" }}>
           Zone: {analysis.zone}
         </div>
       )}

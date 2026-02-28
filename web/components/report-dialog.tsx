@@ -46,7 +46,7 @@ export function ReportDialog({ report, onGenerate }: Props) {
               </button>
             </div>
             {report ? (
-              <pre style={{ whiteSpace: "pre-wrap", fontSize: 14, color: "#d1d5db" }}>
+              <pre style={{ whiteSpace: "pre-wrap", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
                 {typeof report === "string"
                   ? report
                   : JSON.stringify(report, null, 2)}

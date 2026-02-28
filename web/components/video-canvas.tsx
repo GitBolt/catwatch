@@ -36,7 +36,7 @@ export function VideoCanvas({ frame, width = 960, height = 540 }: Props) {
         height: "100%",
         width: "100%",
         borderRadius: "var(--radius)",
-        background: "#111827",
+        background: "var(--bg-card)",
         objectFit: "contain",
       }}
     />
