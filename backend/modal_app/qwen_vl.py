@@ -1,58 +1,121 @@
+import base64
+import io
+import json
+import time
+
 import modal
 
-from . import app, vllm_image
+from . import app, qwen_image
+
+MODEL_ID = "Qwen/Qwen2-VL-7B-Instruct"
 
 
 @app.cls(
-    gpu=modal.gpu.A100(size="40GB"),
-    image=vllm_image,
-    keep_warm=1,
-    container_idle_timeout=300,
+    gpu="A100",
+    image=qwen_image,
+    min_containers=1,
+    scaledown_window=300,
 )
 class Qwen25VLInspector:
     @modal.enter()
     def load(self):
-        from vllm import LLM, SamplingParams
+        from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+        import torch
 
-        self.llm = LLM(
-            "Qwen/Qwen2.5-VL-7B-Instruct",
-            max_model_len=8192,
-            gpu_memory_utilization=0.9,
+        self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+            MODEL_ID,
+            torch_dtype=torch.float16,
+            device_map="auto",
         )
-        self.sampling_params = SamplingParams(
-            temperature=0.3,
-            max_tokens=2048,
+        self.processor = AutoProcessor.from_pretrained(MODEL_ID)
+        print(f"[Qwen2VL] Loaded {MODEL_ID} on A100.")
+
+    def _run(self, messages, max_new_tokens=512):
+        from qwen_vl_utils import process_vision_info
+
+        text = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
         )
+        image_inputs, video_inputs = process_vision_info(messages)
+        inputs = self.processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        ).to(self.model.device)
+
+        import torch
+        t0 = time.time()
+        with torch.no_grad():
+            output_ids = self.model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                temperature=0.1,
+                do_sample=True,
+            )
+        generated = output_ids[:, inputs["input_ids"].shape[1]:]
+        text_out = self.processor.batch_decode(generated, skip_special_tokens=True)[0]
+        print(f"[Qwen2VL] inference {round((time.time()-t0)*1000)}ms")
+        return text_out
+
+    def _image_message(self, image_b64):
+        return {"type": "image", "image": f"data:image/jpeg;base64,{image_b64}"}
+
+    @modal.method()
+    def analyze_frame(self, image_b64, system_prompt, schema_prompt):
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    self._image_message(image_b64),
+                    {"type": "text", "text": f"{system_prompt}\n\n{schema_prompt}"},
+                ],
+            }
+        ]
+        raw = self._run(messages, max_new_tokens=512)
+
+        # Try to extract JSON from freeform output
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        if start != -1 and end > start:
+            try:
+                return json.loads(raw[start:end])
+            except json.JSONDecodeError:
+                pass
+        return {
+            "description": raw.strip(),
+            "severity": "GREEN",
+            "findings": [],
+            "callout": "",
+            "confidence": 0.5,
+            "zone": None,
+        }
 
     @modal.method()
     def generate(self, prompt, image_b64=None):
-        messages = [{"role": "user", "content": []}]
-
+        content = []
         if image_b64:
-            messages[0]["content"].append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{image_b64}"},
-            })
-
-        messages[0]["content"].append({"type": "text", "text": prompt})
-
-        outputs = self.llm.chat(messages, self.sampling_params)
-        return outputs[0].outputs[0].text
+            content.append(self._image_message(image_b64))
+        content.append({"type": "text", "text": prompt})
+        messages = [{"role": "user", "content": content}]
+        return self._run(messages, max_new_tokens=512)
 
     @modal.method()
     def zone_brief(self, prompt):
-        messages = [{"role": "user", "content": prompt}]
-        outputs = self.llm.chat(messages, self.sampling_params)
-        return outputs[0].outputs[0].text
+        messages = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
+        return self._run(messages, max_new_tokens=512)
 
     @modal.method()
-    def spec_assessment(self, prompt, image_b64):
-        return self.generate(prompt, image_b64=image_b64)
+    def spec_assessment(self, prompt, image_b64=None):
+        content = []
+        if image_b64:
+            content.append(self._image_message(image_b64))
+        content.append({"type": "text", "text": prompt})
+        messages = [{"role": "user", "content": content}]
+        return self._run(messages, max_new_tokens=512)
 
     @modal.method()
     def generate_report(self, prompt):
-        params = self.sampling_params.clone()
-        params.max_tokens = 4096
-        messages = [{"role": "user", "content": prompt}]
-        outputs = self.llm.chat(messages, params)
-        return outputs[0].outputs[0].text
+        messages = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
+        return self._run(messages, max_new_tokens=2048)

@@ -5,9 +5,9 @@ from . import app, siglip_image
 
 
 @app.cls(
-    gpu=modal.gpu.A10G(),
+    gpu="A10G",
     image=siglip_image,
-    container_idle_timeout=120,
+    scaledown_window=120,
 )
 class SigLIP2PartsIdentifier:
     @modal.enter()

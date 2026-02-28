@@ -2,12 +2,20 @@ import modal
 
 app = modal.App("dronecat")
 
-florence2_image = (
+
+def _download_yolo():
+    from ultralytics import YOLO
+    YOLO("yolov8n.pt")
+
+
+yolo_image = (
     modal.Image.debian_slim(python_version="3.11")
+    .apt_install("libgl1-mesa-glx", "libglib2.0-0")
     .pip_install(
-        "torch", "torchvision", "transformers",
-        "Pillow", "numpy", "accelerate",
+        "ultralytics", "torch", "torchvision",
+        "Pillow", "numpy", "opencv-python-headless",
     )
+    .run_function(_download_yolo)
 )
 
 whisper_image = (
@@ -19,11 +27,11 @@ whisper_image = (
     )
 )
 
-vllm_image = (
+qwen_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
-        "vllm", "torch", "transformers",
-        "Pillow", "numpy",
+        "transformers", "torch", "torchvision",
+        "accelerate", "qwen-vl-utils", "Pillow", "numpy",
     )
 )
 
@@ -41,4 +49,5 @@ web_image = (
         "fastapi", "uvicorn[standard]",
         "websockets", "requests",
     )
+    .add_local_dir("data", remote_path="/root/data")
 )

@@ -23,8 +23,15 @@ def _load_catrack_prompt(source_file):
     return raw[idx:]
 
 
-_sub_section_data = _load_json("sub_section_prompts.json")
-_spec_kb = _load_json("cat_spec_kb.json")
+try:
+    _sub_section_data = _load_json("sub_section_prompts.json")
+except FileNotFoundError:
+    _sub_section_data = {"baseline": {"system_prompt": "", "user_prompt": "", "frames_only_prompt": ""}, "prompts": {}}
+
+try:
+    _spec_kb = _load_json("cat_spec_kb.json")
+except FileNotFoundError:
+    _spec_kb = {}
 
 SYSTEM_PROMPT = _sub_section_data["baseline"]["system_prompt"]
 USER_PROMPT = _sub_section_data["baseline"]["user_prompt"]
@@ -59,6 +66,55 @@ def get_sub_section_prompt(prompt_key):
         )
 
     return SYSTEM_PROMPT
+
+
+GENERAL_SCENE_PERSONA = """\
+You are a safety-focused visual copilot for field operations.
+Describe what is actually visible in the current frame and flag only notable
+changes or potential safety issues (fall risk, obstruction, unusual motion,
+hazards, unsafe posture, blocked pathways).
+
+If nothing important changed, state that the scene is stable.
+Be concise, practical, and avoid repeating the same observation.
+"""
+
+GENERAL_OUTPUT_SCHEMA = """
+Analyze this frame and respond in valid JSON with these exact keys:
+- description: concise scene description (1 sentence)
+- severity: GREEN / YELLOW / RED
+- findings: array of notable observations (max 3)
+- callout: most notable short callout in 4-6 words; use "Scene unchanged" if no meaningful change
+- confidence: 0.0 to 1.0
+- zone: null
+"""
+
+CAT_INSPECTION_PERSONA = """\
+You are a visual inspection co-pilot assisting a CAT equipment technician on a CAT 325 excavator. \
+FIRST describe what you actually see in this frame — the environment, people, \
+equipment, activity, lighting conditions. THEN if you see heavy equipment \
+(especially Caterpillar/CAT machines, typically yellow body with black trim), \
+assess its condition focusing on: hydraulic hoses (abrasion, swelling, leaks), \
+tracks and rollers, bucket teeth and cutting edge, boom/stick pins, cab glass, \
+engine area, cooling system (radiator fins, hoses), steps and handrails, \
+structural welds and frame integrity, attachment coupler.
+
+Severity rules:
+- GREEN: no equipment issues, or component in acceptable condition
+- YELLOW: approaching service limit, worth monitoring
+- RED: immediate action needed, safety concern
+
+If no heavy equipment is visible, describe the scene honestly and set severity GREEN. \
+Never fabricate equipment that is not in the image.\
+"""
+
+VLM_OUTPUT_SCHEMA = """
+Analyze this frame. Respond in valid JSON with these exact keys:
+- description: what you see in 1-2 sentences (be specific and honest)
+- severity: GREEN / YELLOW / RED
+- findings: array of specific observations (max 3), empty if nothing notable
+- callout: the single most notable thing in 4-5 words (this is spoken aloud). If nothing changed or notable, use "Scene normal"
+- confidence: 0.0 to 1.0
+- zone: inspection zone if equipment visible (hydraulics, undercarriage, bucket, boom_arm, stick, cab, engine, cooling, steps_handrails, tires_rims, structural, attachments, drivetrain, tracks_left, tracks_right) or null"""
 
 
 BRIEF_PROMPT = """\

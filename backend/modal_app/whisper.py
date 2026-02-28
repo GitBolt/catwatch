@@ -4,10 +4,10 @@ from . import app, whisper_image
 
 
 @app.cls(
-    gpu=modal.gpu.T4(),
+    gpu="T4",
     image=whisper_image,
-    keep_warm=1,
-    container_idle_timeout=600,
+    min_containers=1,
+    scaledown_window=600,
 )
 class WhisperTranscriber:
     @modal.enter()
@@ -32,7 +32,12 @@ class WhisperTranscriber:
             audio_array,
             sampling_rate=sample_rate,
             return_tensors="pt",
-        ).to("cuda")
+        )
+        inputs = inputs.to("cuda")
+        if hasattr(inputs, "input_features"):
+            inputs["input_features"] = inputs["input_features"].to(self.model.dtype)
+        elif hasattr(inputs, "input_values"):
+            inputs["input_values"] = inputs["input_values"].to(self.model.dtype)
 
         with torch.no_grad():
             predicted_ids = self.model.generate(**inputs, max_new_tokens=256)
