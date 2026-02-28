@@ -50,7 +50,7 @@ web_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
         "fastapi", "uvicorn[standard]",
-        "websockets", "requests",
+        "websockets", "requests", "Pillow",
     )
     .add_local_dir("data", remote_path="/root/data")
 )
