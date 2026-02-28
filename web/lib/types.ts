@@ -87,6 +87,11 @@ export interface ZoneBriefMessage {
   text: string;
 }
 
+export interface ErrorMessage {
+  type: "error";
+  message: string;
+}
+
 export type ServerMessage =
   | DetectionMessage
   | AnalysisMessage
@@ -96,7 +101,8 @@ export type ServerMessage =
   | ReportMessage
   | FrameMessage
   | SessionStateMessage
-  | ZoneBriefMessage;
+  | ZoneBriefMessage
+  | ErrorMessage;
 
 // Session types for the dashboard
 export interface SessionSummary {

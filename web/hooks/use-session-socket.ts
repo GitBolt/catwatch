@@ -138,23 +138,26 @@ export function useSessionSocket(sessionId: string | null): SessionState {
 
     let reconnectTimer: ReturnType<typeof setTimeout>;
     let backoff = 2000;
-    // Track unit serial within connection for memory storage
+    let stopped = false;
     let currentUnitSerial: string | null = null;
 
     function connect() {
+      if (stopped) return;
+
       const url = `${BACKEND_WS}/ws/view/${sessionId}`;
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
         setConnected(true);
-        backoff = 2000;
       };
 
       ws.onclose = () => {
         setConnected(false);
-        reconnectTimer = setTimeout(connect, backoff);
-        backoff = Math.min(backoff * 1.5, 30000);
+        if (!stopped) {
+          reconnectTimer = setTimeout(connect, backoff);
+          backoff = Math.min(backoff * 1.5, 30000);
+        }
       };
 
       ws.onerror = () => ws.close();
@@ -163,6 +166,12 @@ export function useSessionSocket(sessionId: string | null): SessionState {
         const msg: ServerMessage = JSON.parse(event.data);
 
         switch (msg.type) {
+          case "error":
+            stopped = true;
+            setConnected(false);
+            ws.close();
+            break;
+
           case "frame":
             setFrame(msg.data);
             setFrameId(msg.frame_id);
@@ -177,7 +186,6 @@ export function useSessionSocket(sessionId: string | null): SessionState {
 
           case "analysis":
             setAnalysis(msg.data);
-            // Store findings in Supermemory if unit is identified
             if (currentUnitSerial && msg.data.findings) {
               for (const f of msg.data.findings) {
                 if (typeof f === "string" && f.trim()) {
@@ -210,13 +218,13 @@ export function useSessionSocket(sessionId: string | null): SessionState {
 
           case "report":
             setReport(msg.data as Record<string, unknown>);
-            // Store report in Supermemory
             if (currentUnitSerial) {
               storeReport(currentUnitSerial, msg.data);
             }
             break;
 
           case "session_state":
+            backoff = 2000;
             setMode(msg.mode);
             if (msg.unit_serial) {
               currentUnitSerial = msg.unit_serial;
@@ -232,6 +240,7 @@ export function useSessionSocket(sessionId: string | null): SessionState {
     connect();
 
     return () => {
+      stopped = true;
       clearTimeout(reconnectTimer);
       wsRef.current?.close();
     };
