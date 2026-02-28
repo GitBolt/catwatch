@@ -1,0 +1,146 @@
+import { notFound } from "next/navigation";
+import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { SEVERITY_COLORS, ZONE_LABELS, type ZoneId } from "@/lib/constants";
+import Link from "next/link";
+
+export default async function InspectionDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const session = await getSession();
+  if (!session) return null;
+
+  const { id } = await params;
+
+  const inspectionSession = await prisma.session.findFirst({
+    where: { id, userId: session.userId },
+    include: {
+      findings: { orderBy: { createdAt: "asc" } },
+      report: true,
+    },
+  });
+
+  if (!inspectionSession) notFound();
+
+  const duration = inspectionSession.endedAt
+    ? Math.round(
+        (new Date(inspectionSession.endedAt).getTime() -
+          new Date(inspectionSession.createdAt).getTime()) /
+          60000,
+      )
+    : null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <Link
+          href="/dashboard/inspections"
+          style={{ fontSize: 14, color: "var(--text-muted)" }}
+        >
+          Inspections
+        </Link>
+        <span style={{ color: "var(--text-dim)" }}>/</span>
+        <h1 className="mono" style={{ fontSize: 20, fontWeight: 700, color: "var(--amber)" }}>
+          {inspectionSession.id.slice(0, 8)}
+        </h1>
+        <span
+          className={
+            inspectionSession.status === "active"
+              ? "badge badge-green"
+              : "badge badge-gray"
+          }
+        >
+          {inspectionSession.status}
+        </span>
+      </div>
+
+      {/* Metadata */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+        <MetaCard
+          label="Date"
+          value={new Date(inspectionSession.createdAt).toLocaleDateString()}
+        />
+        <MetaCard label="Mode" value={inspectionSession.mode} />
+        <MetaCard
+          label="Duration"
+          value={duration !== null ? `${duration} min` : "In progress"}
+        />
+        <MetaCard
+          label="Coverage"
+          value={`${Math.round(inspectionSession.coveragePct)}%`}
+        />
+      </div>
+
+      {/* Findings */}
+      <div>
+        <h2 style={{ marginBottom: 16, fontSize: 18, fontWeight: 600 }}>
+          Findings ({inspectionSession.findings.length})
+        </h2>
+        {inspectionSession.findings.length === 0 ? (
+          <div
+            className="card"
+            style={{ padding: 24, textAlign: "center", fontSize: 14, color: "var(--text-dim)" }}
+          >
+            No findings recorded.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {inspectionSession.findings.map((f) => {
+              const sev = f.rating as keyof typeof SEVERITY_COLORS;
+              const colors = SEVERITY_COLORS[sev] || SEVERITY_COLORS.GRAY;
+              const zoneLabel =
+                ZONE_LABELS[f.zone as ZoneId] || f.zone;
+              return (
+                <div
+                  key={f.id}
+                  style={{
+                    borderRadius: "var(--radius)",
+                    border: `1px solid ${colors.border}`,
+                    padding: 16,
+                    background: colors.bg,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>
+                      {f.rating}
+                    </span>
+                    <span style={{ fontSize: 14, color: "var(--text-muted)" }}>{zoneLabel}</span>
+                    <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-dim)" }}>
+                      {new Date(f.createdAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <p style={{ marginTop: 4, fontSize: 14, color: "#d1d5db" }}>{f.description}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Report */}
+      {inspectionSession.report && (
+        <div>
+          <h2 style={{ marginBottom: 16, fontSize: 18, fontWeight: 600 }}>Report</h2>
+          <div className="card" style={{ padding: 24 }}>
+            <pre style={{ whiteSpace: "pre-wrap", fontSize: 14, color: "#d1d5db" }}>
+              {typeof inspectionSession.report.data === "string"
+                ? inspectionSession.report.data
+                : JSON.stringify(inspectionSession.report.data, null, 2)}
+            </pre>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MetaCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="card" style={{ padding: 12 }}>
+      <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{label}</div>
+      <div style={{ marginTop: 4, fontSize: 14, fontWeight: 500, textTransform: "capitalize" }}>{value}</div>
+    </div>
+  );
+}

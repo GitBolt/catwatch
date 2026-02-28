@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Application tables ───────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  magicIss  String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  apiKeys   ApiKey[]
+  sessions  Session[]
+}
+
+model ApiKey {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String    @unique
+  name      String
+  createdAt DateTime  @default(now())
+  lastUsed  DateTime?
+  sessions  Session[]
+}
+
+model Session {
+  id          String    @id
+  apiKeyId    String
+  apiKey      ApiKey    @relation(fields: [apiKeyId], references: [id])
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  mode        String    @default("general")
+  status      String    @default("active")
+  createdAt   DateTime  @default(now())
+  endedAt     DateTime?
+  zonesSeen   Int       @default(0)
+  coveragePct Float     @default(0)
+  findings    Finding[]
+  report      Report?
+}
+
+model Finding {
+  id          String   @id @default(uuid())
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  zone        String
+  rating      String
+  description String
+  createdAt   DateTime @default(now())
+}
+
+model Report {
+  id        String   @id @default(uuid())
+  sessionId String   @unique
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime @default(now())
+}
