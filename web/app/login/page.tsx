@@ -52,12 +52,16 @@ export default function LoginPage() {
   return (
     <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center" }}>
       <div style={{ width: "100%", maxWidth: 360, padding: 32 }}>
-        <div style={{ marginBottom: 32 }}>
+        <div style={{ marginBottom: 32, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="CatWatch" width={48} height={48} style={{ borderRadius: 8, marginBottom: 12 }} />
           <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--amber)", letterSpacing: "-0.02em", marginBottom: 6 }}>
             CatWatch
           </h1>
-          <p style={{ fontSize: 13, color: "var(--text-dim)" }}>
-            Equipment inspection platform
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>
+            Drone-powered equipment inspection platform.
+            <br />
+            Sign in to manage API keys and view inspection reports.
           </p>
         </div>
 

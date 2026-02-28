@@ -11,6 +11,7 @@ import { FindingsList } from "@/components/findings-list";
 import { VoiceButton } from "@/components/voice-button";
 import { ReportDialog } from "@/components/report-dialog";
 import { TopBar } from "@/components/top-bar";
+import { UnitHistoryPanel } from "@/components/unit-history-panel";
 
 export default function LiveSessionPage() {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +29,11 @@ export default function LiveSessionPage() {
     mode,
     yoloMs,
     report,
+    unitSerial,
+    unitModel,
+    fleetTag,
+    unitProfile,
+    unitProfileLoading,
     send,
   } = useSessionSocket(id);
 
@@ -118,6 +124,13 @@ export default function LiveSessionPage() {
             overflowY: "auto",
           }}
         >
+          <UnitHistoryPanel
+            unitSerial={unitSerial}
+            unitModel={unitModel}
+            fleetTag={fleetTag}
+            profile={unitProfile}
+            loading={unitProfileLoading}
+          />
           <AnalysisPanel analysis={analysis} />
           <ZonePanel zonesSeen={zonesSeen} coverage={coverage} />
           <FindingsList findings={findings} />

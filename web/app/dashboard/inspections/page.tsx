@@ -17,14 +17,21 @@ export default async function InspectionsPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700 }}>Inspections</h1>
+      <div>
+        <h1 style={{ fontSize: 24, fontWeight: 700 }}>Inspections</h1>
+        <p style={{ marginTop: 4, fontSize: 14, color: "var(--text-muted)" }}>
+          Each inspection session is created when a drone connects via the SDK.
+          Click a session to view detailed findings and download the PDF report.
+        </p>
+      </div>
 
       {sessions.length === 0 ? (
         <div
           className="card"
           style={{ padding: 32, textAlign: "center", color: "var(--text-dim)" }}
         >
-          No inspections yet.
+          No inspections yet. Inspections appear here automatically when a
+          drone connects using the SDK with your API key.
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -44,10 +51,10 @@ export default async function InspectionsPage() {
               {sessions.map((s) => {
                 const duration = s.endedAt
                   ? Math.round(
-                      (new Date(s.endedAt).getTime() -
-                        new Date(s.createdAt).getTime()) /
-                        60000,
-                    )
+                    (new Date(s.endedAt).getTime() -
+                      new Date(s.createdAt).getTime()) /
+                    60000,
+                  )
                   : null;
 
                 const redCount = s.findings.filter(

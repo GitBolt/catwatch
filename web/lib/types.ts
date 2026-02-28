@@ -70,6 +70,23 @@ export interface FrameMessage {
   frame_id: number;
 }
 
+export interface SessionStateMessage {
+  type: "session_state";
+  session_id: string;
+  mode: string;
+  zones_seen: number;
+  active: boolean;
+  unit_serial?: string | null;
+  unit_model?: string | null;
+  fleet_tag?: string | null;
+}
+
+export interface ZoneBriefMessage {
+  type: "zone_brief";
+  zone: string;
+  text: string;
+}
+
 export type ServerMessage =
   | DetectionMessage
   | AnalysisMessage
@@ -77,7 +94,9 @@ export type ServerMessage =
   | VoiceAnswerMessage
   | ZoneFirstSeenMessage
   | ReportMessage
-  | FrameMessage;
+  | FrameMessage
+  | SessionStateMessage
+  | ZoneBriefMessage;
 
 // Session types for the dashboard
 export interface SessionSummary {

@@ -42,6 +42,9 @@ model Session {
   endedAt     DateTime?
   zonesSeen   Int       @default(0)
   coveragePct Float     @default(0)
+  unitSerial  String?
+  model       String?
+  fleetTag    String?
   findings    Finding[]
   report      Report?
 }

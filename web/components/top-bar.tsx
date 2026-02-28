@@ -32,7 +32,11 @@ export function TopBar({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <span style={{ fontWeight: 700, fontSize: 15, color: "var(--amber)", letterSpacing: "-0.02em" }}>CatWatch</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="CatWatch" width={28} height={28} style={{ borderRadius: 4 }} />
+          <span style={{ fontWeight: 700, fontSize: 15, color: "var(--amber)", letterSpacing: "-0.02em" }}>CatWatch</span>
+        </span>
         <span className="mono" style={{ fontSize: 12, color: "var(--text-dim)" }}>
           {sessionId.slice(0, 8)}
         </span>

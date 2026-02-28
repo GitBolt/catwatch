@@ -6,18 +6,20 @@ export default async function DashboardPage() {
   const session = await getSession();
   if (!session) return null;
 
-  const [totalSessions, totalFindings, recentSessions] = await Promise.all([
-    prisma.session.count({ where: { userId: session.userId } }),
-    prisma.finding.count({
-      where: { session: { userId: session.userId } },
-    }),
-    prisma.session.findMany({
-      where: { userId: session.userId },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      include: { _count: { select: { findings: true } } },
-    }),
-  ]);
+  const [totalSessions, totalFindings, apiKeyCount, recentSessions] =
+    await Promise.all([
+      prisma.session.count({ where: { userId: session.userId } }),
+      prisma.finding.count({
+        where: { session: { userId: session.userId } },
+      }),
+      prisma.apiKey.count({ where: { userId: session.userId } }),
+      prisma.session.findMany({
+        where: { userId: session.userId },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        include: { _count: { select: { findings: true } } },
+      }),
+    ]);
 
   const redFindings = await prisma.finding.count({
     where: { session: { userId: session.userId }, rating: "RED" },
@@ -25,17 +27,79 @@ export default async function DashboardPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>Dashboard</h1>
+      <div>
+        <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>
+          Dashboard
+        </h1>
+        <p style={{ marginTop: 4, fontSize: 14, color: "var(--text-muted)" }}>
+          Overview of your drone inspections and platform activity.
+        </p>
+      </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: 16,
+        }}
+      >
         <StatCard label="Total Inspections" value={totalSessions} />
         <StatCard label="Total Findings" value={totalFindings} />
         <StatCard label="Red Flags" value={redFindings} />
+        <StatCard label="API Keys" value={apiKeyCount} />
       </div>
 
+      {/* Quick-start guide if no sessions yet */}
+      {totalSessions === 0 && apiKeyCount === 0 && (
+        <div
+          className="card"
+          style={{
+            padding: 24,
+            borderColor: "var(--border-hover)",
+          }}
+        >
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
+            Getting Started
+          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <Step
+              number={1}
+              title="Create an API Key"
+              description="Go to API Keys and create a key to authenticate your drone's SDK connection."
+              link="/dashboard/keys"
+              linkText="Create API Key →"
+            />
+            <Step
+              number={2}
+              title="Install the Python SDK"
+              description="pip install catwatch"
+              code
+            />
+            <Step
+              number={3}
+              title="Connect your camera feed"
+              description='from catwatch import CatWatch
+cw = CatWatch(api_key="cw_live_YOUR_KEY")
+cw.connect(source=0)
+cw.run()'
+              code
+            />
+          </div>
+        </div>
+      )}
+
       <div>
-        <div style={{ marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 style={{ fontSize: 18, fontWeight: 600 }}>Recent Inspections</h2>
+        <div
+          style={{
+            marginBottom: 16,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <h2 style={{ fontSize: 18, fontWeight: 600 }}>
+            Recent Inspections
+          </h2>
           <Link
             href="/dashboard/inspections"
             style={{ fontSize: 14, color: "var(--amber)" }}
@@ -47,10 +111,14 @@ export default async function DashboardPage() {
         {recentSessions.length === 0 ? (
           <div
             className="card"
-            style={{ padding: 32, textAlign: "center", color: "var(--text-dim)" }}
+            style={{
+              padding: 32,
+              textAlign: "center",
+              color: "var(--text-dim)",
+            }}
           >
-            No inspections yet. Create an API key and connect your drone to get
-            started.
+            No inspections yet. Create an API key, install the SDK, and connect
+            your drone to start inspecting.
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -63,20 +131,54 @@ export default async function DashboardPage() {
                     : `/dashboard/inspections/${s.id}`
                 }
                 className="card card-hover"
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
                   <span
-                    className={s.status === "active" ? "dot dot-green" : "dot dot-gray"}
+                    className={
+                      s.status === "active"
+                        ? "dot dot-green"
+                        : "dot dot-gray"
+                    }
                   />
-                  <span className="mono" style={{ fontSize: 14, color: "var(--text-muted)" }}>
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: 14,
+                      color: "var(--text-muted)",
+                    }}
+                  >
                     {s.id.slice(0, 8)}
                   </span>
-                  <span style={{ fontSize: 14, textTransform: "capitalize", color: "var(--text-muted)" }}>
+                  <span
+                    style={{
+                      fontSize: 14,
+                      textTransform: "capitalize",
+                      color: "var(--text-muted)",
+                    }}
+                  >
                     {s.mode}
                   </span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 14, color: "var(--text-dim)" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 16,
+                    fontSize: 14,
+                    color: "var(--text-dim)",
+                  }}
+                >
                   <span>{s._count.findings} findings</span>
                   <span>{Math.round(s.coveragePct)}% coverage</span>
                   <span>
@@ -95,8 +197,107 @@ export default async function DashboardPage() {
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="card stat-card">
-      <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>{value}</div>
-      <div style={{ marginTop: 4, fontSize: 13, color: "var(--text-muted)" }}>{label}</div>
+      <div
+        style={{
+          fontSize: 28,
+          fontWeight: 700,
+          letterSpacing: "-0.03em",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {value}
+      </div>
+      <div style={{ marginTop: 4, fontSize: 13, color: "var(--text-muted)" }}>
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function Step({
+  number,
+  title,
+  description,
+  link,
+  linkText,
+  code,
+}: {
+  number: number;
+  title: string;
+  description: string;
+  link?: string;
+  linkText?: string;
+  code?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 12,
+        alignItems: "flex-start",
+      }}
+    >
+      <div
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: "50%",
+          background: "var(--amber-dim)",
+          color: "var(--amber)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 12,
+          fontWeight: 700,
+          flexShrink: 0,
+          marginTop: 2,
+        }}
+      >
+        {number}
+      </div>
+      <div>
+        <div style={{ fontWeight: 600, fontSize: 14 }}>{title}</div>
+        {code ? (
+          <pre
+            className="mono"
+            style={{
+              marginTop: 4,
+              fontSize: 12,
+              color: "var(--text-muted)",
+              background: "var(--bg)",
+              padding: "8px 12px",
+              borderRadius: "var(--radius)",
+              border: "1px solid var(--border)",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {description}
+          </pre>
+        ) : (
+          <p
+            style={{
+              marginTop: 2,
+              fontSize: 13,
+              color: "var(--text-muted)",
+            }}
+          >
+            {description}
+          </p>
+        )}
+        {link && (
+          <Link
+            href={link}
+            style={{
+              display: "inline-block",
+              marginTop: 6,
+              fontSize: 13,
+              color: "var(--amber)",
+            }}
+          >
+            {linkText}
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
