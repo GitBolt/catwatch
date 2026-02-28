@@ -1,5 +1,7 @@
 import asyncio
 import json
+import os
+import secrets
 import time
 import traceback
 from datetime import datetime
@@ -14,16 +16,38 @@ from .qwen_vl import Qwen25VLInspector
 
 VLM_ANALYSIS_INTERVAL_S = 3.0   # run Qwen every 3s when equipment is in frame
 
+# ── Live session registry (in-memory, ephemeral) ──────────────────────────
 
-@app.function(image=web_image, min_containers=1, scaledown_window=600)
+_sessions = {}   # session_id → session dict
+
+
+@app.function(
+    image=web_image,
+    min_containers=1,
+    scaledown_window=600,
+    secrets=[modal.Secret.from_name("catwatch-db")],
+)
 @modal.asgi_app()
 def web():
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+    from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import JSONResponse
 
     api = FastAPI()
 
+    api.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     yolo = YoloDetector()
     qwen = Qwen25VLInspector()
+
+    # ══════════════════════════════════════════════════════════════════════
+    #  LEGACY DEV ENDPOINT — /ws (unchanged)
+    # ══════════════════════════════════════════════════════════════════════
 
     @api.websocket("/ws")
     async def inspection_ws(ws: WebSocket):
@@ -325,8 +349,422 @@ def web():
         except WebSocketDisconnect:
             pass
 
+    # ══════════════════════════════════════════════════════════════════════
+    #  PLATFORM ENDPOINTS — REST + WebSocket
+    # ══════════════════════════════════════════════════════════════════════
+
+    # ── REST: Create session ──────────────────────────────────────────────
+
+    @api.post("/api/sessions")
+    async def create_session(request: Request):
+        from .db import validate_api_key, create_session as db_create_session
+
+        body = await request.json()
+        api_key = body.get("api_key", "")
+        mode = body.get("mode", "general")
+
+        if not api_key:
+            return JSONResponse({"error": "api_key required"}, status_code=400)
+
+        key_info = await validate_api_key(api_key)
+        if not key_info:
+            return JSONResponse({"error": "Invalid API key"}, status_code=401)
+
+        session_id = secrets.token_hex(6)  # 12-char hex like "a1b2c3d4e5f6"
+
+        await db_create_session(session_id, key_info["api_key_id"], key_info["user_id"], mode)
+
+        # Initialize in-memory session state
+        _sessions[session_id] = {
+            "id": session_id,
+            "api_key_id": key_info["api_key_id"],
+            "user_id": key_info["user_id"],
+            "mode": mode,
+            "ingest_ws": None,
+            "viewer_wss": [],
+            "seen_zones": set(),
+            "zone_findings": {},
+            "sensor_snapshot": {},
+            "latest_frame_b64": None,
+            "latest_frame_id": -1,
+            "latest_frame_client_ts": 0.0,
+            "last_vlm_run_ts": 0.0,
+            "vlm_busy": False,
+            "last_vlm_zone": None,
+            "yolo_busy": False,
+            "pending_frame": None,
+        }
+
+        dashboard_host = os.environ.get("DASHBOARD_URL", "https://catwatch.vercel.app")
+        ws_host = os.environ.get("MODAL_WS_HOST", request.base_url.hostname)
+        scheme = "wss" if request.url.scheme == "https" else "ws"
+
+        return JSONResponse({
+            "session_id": session_id,
+            "dashboard_url": f"{dashboard_host}/session/{session_id}",
+            "ws_url": f"{scheme}://{ws_host}/ws/ingest/{session_id}",
+        })
+
+    @api.get("/api/sessions/{session_id}")
+    async def get_session(session_id: str):
+        sess = _sessions.get(session_id)
+        if not sess:
+            return JSONResponse({"error": "Session not found"}, status_code=404)
+        return JSONResponse({
+            "session_id": sess["id"],
+            "mode": sess["mode"],
+            "zones_seen": len(sess["seen_zones"]),
+            "active": sess["ingest_ws"] is not None,
+        })
+
+    # ── Broadcast helper ──────────────────────────────────────────────────
+
+    async def _broadcast(session, msg):
+        """Send a message to the ingest SDK and all viewer WebSockets."""
+        dead = []
+        for i, viewer_ws in enumerate(session["viewer_wss"]):
+            try:
+                await viewer_ws.send_json(msg)
+            except Exception:
+                dead.append(i)
+        for i in reversed(dead):
+            session["viewer_wss"].pop(i)
+
+    # ── Session pipeline (parameterized by session dict) ──────────────────
+
+    async def _run_session_pipeline(session, ingest_ws):
+        """Run the YOLO→Qwen pipeline for a session, reading frames from ingest_ws."""
+
+        async def send_all(msg):
+            """Send to ingest SDK + all viewers."""
+            try:
+                await ingest_ws.send_json(msg)
+            except Exception:
+                pass
+            await _broadcast(session, msg)
+
+        async def run_vlm(frame_b64, frame_id, frame_client_ts, triggered_by="cadence"):
+            if session["vlm_busy"]:
+                return
+            session["vlm_busy"] = True
+            session["last_vlm_run_ts"] = time.monotonic()
+            try:
+                from backend.prompts import build_zone_inspection_prompt
+                persona, schema = build_zone_inspection_prompt(
+                    session["last_vlm_zone"], mode=session["mode"]
+                )
+                analysis = await asyncio.wait_for(
+                    asyncio.to_thread(qwen.analyze_frame.remote, frame_b64, persona, schema),
+                    timeout=120,
+                )
+                if not isinstance(analysis, dict):
+                    analysis = {"description": str(analysis), "severity": "GREEN", "findings": [], "callout": "", "confidence": 0.5, "zone": None}
+                analysis["triggered_by"] = triggered_by
+                new_zone = analysis.get("zone")
+                if new_zone:
+                    session["last_vlm_zone"] = new_zone
+
+                msg = {
+                    "type": "analysis", "data": analysis,
+                    "mode": session["mode"], "frame_id": frame_id,
+                    "client_ts": frame_client_ts, "server_ts": time.time(),
+                }
+                await send_all(msg)
+
+                # Persist findings from VLM analysis
+                from .db import save_finding
+                for f in analysis.get("findings", []):
+                    if isinstance(f, str) and f.strip():
+                        zone = analysis.get("zone") or "unknown"
+                        severity = analysis.get("severity", "GREEN")
+                        try:
+                            await save_finding(session["id"], zone, severity, f)
+                        except Exception as e:
+                            print(f"[DB] save_finding error: {e}")
+
+            except asyncio.TimeoutError:
+                try:
+                    await send_all({
+                        "type": "analysis",
+                        "data": {"description": "VLM warming up...", "severity": "GREEN", "findings": [], "callout": "VLM loading", "confidence": 0.0, "zone": None},
+                        "mode": session["mode"], "frame_id": frame_id,
+                        "client_ts": frame_client_ts, "server_ts": time.time(),
+                    })
+                except Exception:
+                    pass
+            except Exception as e:
+                print(f"[VLM] Error: {e}")
+                traceback.print_exc()
+            finally:
+                session["vlm_busy"] = False
+
+        async def run_report_session(msg):
+            try:
+                from backend.prompts import REPORT_PROMPT
+                now = datetime.utcnow()
+                prompt = REPORT_PROMPT.format(
+                    model=msg.get("model", "CAT 325"), serial=msg.get("serial", ""),
+                    hours=msg.get("hours", 0), technician=msg.get("technician", ""),
+                    duration_minutes=msg.get("duration_minutes", 0),
+                    coverage_percent=msg.get("coverage_percent", 0),
+                    findings_json=json.dumps(list(session["zone_findings"].values()), indent=2),
+                    work_order_json=msg.get("work_order_json", "[]"),
+                    date_compact=now.strftime("%Y%m%d"), timestamp=now.isoformat() + "Z",
+                )
+                report = await asyncio.wait_for(
+                    asyncio.to_thread(qwen.generate_report.remote, prompt), timeout=120,
+                )
+            except asyncio.TimeoutError:
+                report = "Report generation timed out."
+            except Exception as e:
+                report = f"Report error: {str(e)[:60]}"
+            await send_all({"type": "report", "data": report})
+            # Persist report
+            from .db import save_report
+            try:
+                await save_report(session["id"], report)
+            except Exception as e:
+                print(f"[DB] save_report error: {e}")
+
+        async def run_voice_session(question, frame_b64):
+            try:
+                context = "You are inspecting a CAT 325 excavator." if session["mode"] == "cat" else "You are a visual copilot for general scene and safety monitoring."
+                prompt = f'{context} The technician asks: "{question}"\nAnswer in one concise sentence based on the image. Be specific and avoid repeating the question.'
+                answer = await asyncio.wait_for(
+                    asyncio.to_thread(qwen.generate.remote, prompt, frame_b64), timeout=30,
+                )
+            except asyncio.TimeoutError:
+                answer = "Still loading, try again in a moment."
+            except Exception:
+                answer = "Could not process question."
+            await send_all({"type": "voice_answer", "text": answer, "mode": session["mode"]})
+
+        async def process_yolo_session(frame_b64, frame_id, frame_client_ts):
+            session["yolo_busy"] = True
+            try:
+                result = await asyncio.to_thread(yolo.detect.remote, frame_b64)
+                detections = result.get("detections", [])
+                yolo_ms = result.get("yolo_ms", 0)
+
+                from backend.zone_config import zone_from_label, zone_from_bbox
+                zone_events = []
+                for det in detections:
+                    zone_id = zone_from_label(det["label"])
+                    if not zone_id:
+                        zone_id = zone_from_bbox(det["bbox"])
+                    det["zone"] = zone_id
+                    if zone_id and zone_id not in session["seen_zones"]:
+                        session["seen_zones"].add(zone_id)
+                        zone_events.append(zone_id)
+
+                det_msg = {
+                    "type": "detection", "detections": detections,
+                    "coverage": len(session["seen_zones"]), "total_zones": 15,
+                    "mode": session["mode"], "yolo_ms": yolo_ms,
+                    "frame_id": frame_id, "client_ts": frame_client_ts,
+                    "server_ts": time.time(),
+                }
+                await send_all(det_msg)
+                for zid in zone_events:
+                    await send_all({"type": "zone_first_seen", "zone": zid})
+
+                if (
+                    detections
+                    and not session["vlm_busy"]
+                    and session["latest_frame_b64"]
+                    and (time.monotonic() - session["last_vlm_run_ts"]) >= VLM_ANALYSIS_INTERVAL_S
+                ):
+                    asyncio.create_task(run_vlm(
+                        session["latest_frame_b64"], session["latest_frame_id"],
+                        session["latest_frame_client_ts"], triggered_by="cadence",
+                    ))
+            except Exception as e:
+                print(f"[YOLO] Error: {e}")
+            finally:
+                session["yolo_busy"] = False
+                if session["pending_frame"]:
+                    pf = session["pending_frame"]
+                    session["pending_frame"] = None
+                    asyncio.create_task(process_yolo_session(pf[0], pf[1], pf[2]))
+
+        # ── Message loop ────────────────────────────────────────────────
+        try:
+            while True:
+                raw = await ingest_ws.receive_text()
+                msg = json.loads(raw)
+                msg_type = msg.get("type")
+
+                if msg_type == "frame":
+                    frame_b64 = msg["data"]
+                    frame_id = int(msg.get("frame_id", 0))
+                    frame_client_ts = float(msg.get("client_ts", 0))
+                    incoming_mode = str(msg.get("mode", "")).lower()
+                    if incoming_mode in ("general", "cat"):
+                        session["mode"] = incoming_mode
+                    session["latest_frame_b64"] = frame_b64
+                    session["latest_frame_id"] = frame_id
+                    session["latest_frame_client_ts"] = frame_client_ts
+
+                    # Relay frame to viewers
+                    await _broadcast(session, {
+                        "type": "frame", "data": frame_b64,
+                        "frame_id": frame_id,
+                    })
+
+                    if session["yolo_busy"]:
+                        session["pending_frame"] = (frame_b64, frame_id, frame_client_ts)
+                    else:
+                        session["pending_frame"] = None
+                        asyncio.create_task(process_yolo_session(frame_b64, frame_id, frame_client_ts))
+
+                elif msg_type == "sensor":
+                    session["sensor_snapshot"] = msg.get("data", {})
+
+                elif msg_type == "generate_report":
+                    asyncio.create_task(run_report_session(msg))
+
+                elif msg_type == "voice_question":
+                    asyncio.create_task(run_voice_session(
+                        msg.get("text", ""), msg.get("frame", ""),
+                    ))
+
+                elif msg_type == "request_vlm_analysis":
+                    if session["latest_frame_b64"] and not session["vlm_busy"]:
+                        asyncio.create_task(run_vlm(
+                            session["latest_frame_b64"], session["latest_frame_id"],
+                            session["latest_frame_client_ts"], triggered_by="manual_request",
+                        ))
+
+                elif msg_type == "set_mode":
+                    requested_mode = str(msg.get("mode", "")).lower()
+                    if requested_mode in ("general", "cat"):
+                        session["mode"] = requested_mode
+                    await send_all({"type": "mode", "mode": session["mode"]})
+
+        except WebSocketDisconnect:
+            pass
+
+    # ── WebSocket: SDK ingest ─────────────────────────────────────────────
+
+    @api.websocket("/ws/ingest/{session_id}")
+    async def ingest_ws(ws: WebSocket, session_id: str):
+        await ws.accept()
+        session = _sessions.get(session_id)
+
+        # Auth handshake: first message must be {"type": "auth", "api_key": "..."}
+        try:
+            raw = await asyncio.wait_for(ws.receive_text(), timeout=10)
+            msg = json.loads(raw)
+        except Exception:
+            await ws.send_json({"type": "error", "message": "Auth timeout"})
+            await ws.close()
+            return
+
+        if msg.get("type") != "auth":
+            await ws.send_json({"type": "error", "message": "Expected auth message"})
+            await ws.close()
+            return
+
+        from .db import validate_api_key
+        key_info = await validate_api_key(msg.get("api_key", ""))
+        if not key_info:
+            await ws.send_json({"type": "error", "message": "Invalid API key"})
+            await ws.close()
+            return
+
+        if not session:
+            await ws.send_json({"type": "error", "message": "Session not found"})
+            await ws.close()
+            return
+
+        await ws.send_json({"type": "auth_ok", "session_id": session_id})
+
+        session["ingest_ws"] = ws
+
+        try:
+            await _run_session_pipeline(session, ws)
+        finally:
+            session["ingest_ws"] = None
+            # End session in DB
+            from .db import end_session
+            try:
+                await end_session(session_id, len(session["seen_zones"]), 0.0)
+            except Exception as e:
+                print(f"[DB] end_session error: {e}")
+            _sessions.pop(session_id, None)
+
+    # ── WebSocket: Dashboard viewer ───────────────────────────────────────
+
+    @api.websocket("/ws/view/{session_id}")
+    async def view_ws(ws: WebSocket, session_id: str):
+        await ws.accept()
+        session = _sessions.get(session_id)
+        if not session:
+            await ws.send_json({"type": "error", "message": "Session not found or ended"})
+            await ws.close()
+            return
+
+        session["viewer_wss"].append(ws)
+        await ws.send_json({
+            "type": "session_state",
+            "session_id": session_id,
+            "mode": session["mode"],
+            "zones_seen": len(session["seen_zones"]),
+            "active": session["ingest_ws"] is not None,
+        })
+
+        try:
+            while True:
+                raw = await ws.receive_text()
+                msg = json.loads(raw)
+                msg_type = msg.get("type")
+
+                # Forward viewer actions to the pipeline
+                if msg_type in ("voice_question", "generate_report", "set_mode", "request_vlm_analysis"):
+                    ingest = session.get("ingest_ws")
+                    if ingest:
+                        # Inject into pipeline by processing directly
+                        if msg_type == "voice_question":
+                            frame = session.get("latest_frame_b64", "")
+                            asyncio.create_task(
+                                _handle_viewer_voice(session, msg.get("text", ""), frame, qwen)
+                            )
+                        elif msg_type == "set_mode":
+                            requested_mode = str(msg.get("mode", "")).lower()
+                            if requested_mode in ("general", "cat"):
+                                session["mode"] = requested_mode
+                            await _broadcast(session, {"type": "mode", "mode": session["mode"]})
+
+        except WebSocketDisconnect:
+            pass
+        finally:
+            if ws in session.get("viewer_wss", []):
+                session["viewer_wss"].remove(ws)
+
+    async def _handle_viewer_voice(session, question, frame_b64, qwen_ref):
+        """Handle voice question from a viewer."""
+        try:
+            context = "You are inspecting a CAT 325 excavator." if session["mode"] == "cat" else "You are a visual copilot."
+            prompt = f'{context} The operator asks: "{question}"\nAnswer concisely.'
+            answer = await asyncio.wait_for(
+                asyncio.to_thread(qwen_ref.generate.remote, prompt, frame_b64), timeout=30,
+            )
+        except Exception:
+            answer = "Could not process question."
+        msg = {"type": "voice_answer", "text": answer, "mode": session["mode"]}
+        # Send to SDK + all viewers
+        ingest = session.get("ingest_ws")
+        if ingest:
+            try:
+                await ingest.send_json(msg)
+            except Exception:
+                pass
+        await _broadcast(session, msg)
+
+    # ── Health ────────────────────────────────────────────────────────────
+
     @api.get("/health")
     async def health():
-        return {"status": "ok", "service": "dronecat"}
+        return {"status": "ok", "service": "dronecat", "sessions": len(_sessions)}
 
     return api

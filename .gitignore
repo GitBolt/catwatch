@@ -7,3 +7,4 @@ __pycache__/
 *.pyo
 .DS_Store
 backend/modal_app/weights/*.pt
+node_modules/

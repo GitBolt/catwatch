@@ -35,6 +35,7 @@ web_image = (
     .pip_install(
         "fastapi", "uvicorn[standard]",
         "websockets", "requests", "Pillow",
+        "asyncpg",
     )
     .add_local_dir("data", remote_path="/root/data")
 )
