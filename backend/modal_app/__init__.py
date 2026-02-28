@@ -35,6 +35,7 @@ siglip_image = (
     .pip_install(
         "torch", "torchvision",
         "transformers==4.46.3",  # pin: 4.47+ has tokenizer-resolution bug with SigLIP2
+        "sentencepiece",         # required by SiglipTokenizer
         "Pillow", "numpy", "chromadb",
     )
 )
