@@ -1,0 +1,113 @@
+{
+  "data_type": "test",
+  "parts": [
+    {
+      "part_number": "8T-4133",
+      "description": "High-Pressure Hydraulic Hose",
+      "compatible_models": ["CAT 320", "CAT 325", "CAT 330"],
+      "price_usd": 127.5,
+      "category": "hydraulics",
+      "sample_images": ["Pass/HydraulicHose.jpg"],
+      "source": "plan"
+    },
+    {
+      "part_number": "1R-0762",
+      "description": "Hydraulic Hose Assembly — Boom",
+      "compatible_models": ["CAT 320", "CAT 325"],
+      "price_usd": 89,
+      "category": "hydraulics",
+      "sample_images": [],
+      "source": "plan"
+    },
+    {
+      "part_number": "1R-0749",
+      "description": "Hydraulic Fluid Filter Element",
+      "compatible_models": ["CAT 320", "CAT 325", "CAT 330", "CAT 336"],
+      "price_usd": 42,
+      "category": "hydraulics",
+      "sample_images": ["Pass/HydraulicFluidFiltrationSystem.jpg", "Fail/HydraulicFluidFiltration.jpg"],
+      "source": "dummy"
+    },
+    {
+      "part_number": "2S-1584",
+      "description": "Hydraulic Fluid Tank Cap Assembly",
+      "compatible_models": ["CAT 325", "CAT 330"],
+      "price_usd": 35,
+      "category": "hydraulics",
+      "sample_images": ["Pass/HydraulicFluidTank.jpg"],
+      "source": "dummy"
+    },
+    {
+      "part_number": "3E-1906",
+      "description": "Coolant Reservoir Assembly",
+      "compatible_models": ["CAT 320", "CAT 325", "CAT 330"],
+      "price_usd": 215,
+      "category": "cooling",
+      "sample_images": ["Pass/CoolantReservoir.jpg"],
+      "source": "dummy"
+    },
+    {
+      "part_number": "7Y-1323",
+      "description": "Cooling System Hose — Radiator Upper",
+      "compatible_models": ["CAT 325", "CAT 330"],
+      "price_usd": 67.5,
+      "category": "cooling",
+      "sample_images": ["Fail/CoolingSystemHose.jpg"],
+      "source": "dummy"
+    },
+    {
+      "part_number": "5P-8500",
+      "description": "Housing Seal — Engine Compartment",
+      "compatible_models": ["CAT 320", "CAT 325"],
+      "price_usd": 18.75,
+      "category": "structural",
+      "sample_images": ["Pass/HousingSeal.jpg"],
+      "source": "dummy"
+    },
+    {
+      "part_number": "6V-6340",
+      "description": "Cab Access Step Assembly",
+      "compatible_models": ["CAT 320", "CAT 325", "CAT 330"],
+      "price_usd": 155,
+      "category": "steps_handrails",
+      "sample_images": ["Pass/GoodStep.jpg", "Fail/DamagedAccessLadder.jpg"],
+      "source": "dummy"
+    },
+    {
+      "part_number": "9R-5060",
+      "description": "Rim Assembly — Front",
+      "compatible_models": ["CAT 924", "CAT 930", "CAT 950"],
+      "price_usd": 485,
+      "category": "tires_rims",
+      "sample_images": ["Pass/BrokenRimBolt1.jpg", "Pass/BrokenRimBolt2.jpg"],
+      "source": "dummy"
+    },
+    {
+      "part_number": "2M-4290",
+      "description": "Wheel Lug Nut",
+      "compatible_models": ["CAT 924", "CAT 930", "CAT 950"],
+      "price_usd": 4.5,
+      "category": "tires_rims",
+      "sample_images": ["Pass/BrokenRimBolt1.jpg"],
+      "source": "dummy"
+    },
+    {
+      "part_number": "8T-0253",
+      "description": "Structural Frame Bracket",
+      "compatible_models": ["CAT 320", "CAT 325"],
+      "price_usd": 92,
+      "category": "structural",
+      "sample_images": ["Fail/RustOnHydraulicComponentBracket.jpg", "Fail/StructuralDamage.jpg"],
+      "source": "dummy"
+    },
+    {
+      "part_number": "3V-7560",
+      "description": "Tire — Loader Front",
+      "compatible_models": ["CAT 924", "CAT 930", "CAT 950"],
+      "price_usd": 1250,
+      "category": "tires_rims",
+      "sample_images": ["Fail/Tire ShowsSignsUnevenWear.jpg"],
+      "source": "dummy"
+    }
+  ]
+}

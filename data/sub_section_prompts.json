@@ -1,0 +1,71 @@
+{
+  "baseline": {
+    "system_prompt": "You are a specialized heavy equipment inspection expert with advanced mechanical engineering credentials. Your role is to perform detailed visual analysis of inspection footage / images, providing professional assessment of machinery conditions. For each component visible in the frames/images: 1. Describe the physical condition with technical precision 2. Identify specific types of damage (wear patterns, fractures, deformation, contamination, etc.) 3. Evaluate structural integrity and functionality 4. Classify issues by severity (Critical: immediate shutdown required; Major: scheduled repair needed; Minor: monitor during next maintenance) 7. Flag safety concerns with priority markers. Base all assessments exclusively on visual evidence from the provided images. Apply industry-standard inspection protocols to your analysis. Maintain objective, factual reporting without assumptions beyond what can be visually confirmed.",
+    "user_prompt": "Perform a comprehensive visual inspection of this heavy equipment footage. For each component visible: 1. Document exact condition using industry-standard terminology 2. Identify any abnormalities (wear, damage, misalignment, leakage, etc.) 3. Classify each issue's severity (Critical/Major/Minor) 4. Provide precise timestamp ranges [MM:SS-MM:SS] for each observation 5. Recommend specific maintenance actions based on findings. Focus exclusively on what can be objectively verified through visual inspection. Highlight potential failure points requiring immediate attention. Your assessment will inform maintenance scheduling and safety protocols.",
+    "frames_only_prompt": "As a certified heavy equipment inspector, conduct a thorough visual assessment of these machinery frames. For each component: 1. Document exact physical condition with technical precision 2. Please identity all the frames and generate the summary frame by frame and don't miss any frames. 2. Classify any detected issues by severity: - CRITICAL (RED): Immediate shutdown required to prevent catastrophic failure - MAJOR (YELLOW): Repair required before next operational cycle - MINOR (GREEN): Monitor during routine maintenance 3. Provide exact timestamp ranges [MM:SS-MM:SS] for every observation 4. Generate a prioritized inspection summary listing all critical findings first. Focus exclusively on visual indicators of mechanical condition. Apply standard inspection protocols for heavy industrial equipment. Your analysis will directly inform maintenance scheduling and safety compliance."
+  },
+  "prompts": {
+    "steps_handrails_prompt": {
+      "source_file": "catrack_samples/PassPrompt1",
+      "title": "GUIDED VIDEO INSPECTION INSTRUCTIONS - STEPS AND HANDRAILS",
+      "red_criteria": "Cracked/broken glass, windshield operation failure, cab structural glass damage, track frame and side step damage, cabin access step failures, handrail system damage, safety rail mounting failures, broken mirror systems, engine access cover damage, cab structural noise issues.",
+      "yellow_criteria": "Step wear and surface condition, step mounting monitoring, handrail surface condition, handrail hardware monitoring, minor glass issues, mirror adjustment needs.",
+      "green_criteria": "Secure step installation, adequate step surface, secure handrail mounting, functional grip systems, clear glass, functional mirrors, effective access safety."
+    },
+    "tires_rims_prompt": {
+      "source_file": "catrack_samples/PassPrompt2",
+      "title": "GUIDED VIDEO INSPECTION INSTRUCTIONS - TIRES AND RIMS SECTION",
+      "red_criteria": "Flat or damaged tires, tire blowouts, severe tire wear with cords showing, cracked or broken rims, loose or missing wheel hardware (lug nuts), severe rim corrosion with pitting.",
+      "yellow_criteria": "Moderate tire wear with reduced tread, uneven tire wear patterns, minor tire damage (small cuts, surface cracking), minor rim damage (dents, surface rust), valve stem issues, pin and bushing wear.",
+      "green_criteria": "Adequate tread depth, proper tire pressure, clean tire surface, structural rim integrity, clean rim surface.",
+      "note": "Most CAT equipment in dataset are tracked vehicles where tire/rim inspection is N/A."
+    },
+    "engine_coolant_prompt": {
+      "source_file": "catrack_samples/FailPrompt1",
+      "title": "GUIDED VIDEO INSPECTION INSTRUCTIONS - ENGINE COOLANT LEVEL",
+      "red_criteria": "Critically low coolant levels, continuous coolant loss, major coolant system leaks, radiator system damage, cooling system hose failures, water pump internal failures, coolant contamination in engine oil, climate control system failure, hydraulic system leak impacting cooling.",
+      "yellow_criteria": "Coolant level approaching service interval, coolant quality degradation, radiator cleaning needs, cooling system hose monitoring, engine temperature trending.",
+      "green_criteria": "Adequate coolant level within range, clean coolant condition, leak-free cooling system, functional radiator, effective engine cooling, functional climate control."
+    },
+    "hydraulic_system_prompt": {
+      "source_file": null,
+      "title": "Hydraulic System Inspection",
+      "use_baseline_with_spec": true
+    },
+    "undercarriage_tracks_prompt": {
+      "source_file": null,
+      "title": "Undercarriage and Tracks Inspection",
+      "use_baseline_with_spec": true
+    },
+    "boom_stick_prompt": {
+      "source_file": null,
+      "title": "Boom and Stick Inspection",
+      "use_baseline_with_spec": true
+    },
+    "bucket_attachments_prompt": {
+      "source_file": null,
+      "title": "Bucket and Attachments Inspection",
+      "use_baseline_with_spec": true
+    },
+    "engine_system_prompt": {
+      "source_file": null,
+      "title": "Engine System Inspection",
+      "use_baseline_with_spec": true
+    },
+    "cab_glass_mirrors_prompt": {
+      "source_file": null,
+      "title": "Cab, Glass and Mirrors Inspection",
+      "use_baseline_with_spec": true
+    },
+    "structural_integrity_prompt": {
+      "source_file": null,
+      "title": "Structural Integrity Inspection",
+      "use_baseline_with_spec": true
+    },
+    "drivetrain_prompt": {
+      "source_file": null,
+      "title": "Drivetrain Inspection",
+      "use_baseline_with_spec": true
+    }
+  }
+}

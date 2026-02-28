@@ -1,0 +1,100 @@
+{
+  "unit": {
+    "model": "CAT 325",
+    "serial": "CAT0325F4K01847"
+  },
+  "fleet_tag": "fleet_CAT_325",
+  "fleet_size": 47,
+  "inspections": [
+    {
+      "inspection_id": "INS-20250502-001",
+      "timestamp": "2025-05-02T10:00:00Z",
+      "operating_hours": 2400,
+      "technician": "TECH-001",
+      "duration_minutes": 22,
+      "coverage_percent": 100,
+      "findings": [
+        {"zone": "hydraulics", "rating": "GREEN", "description": "Hoses clean, no seepage at fittings"},
+        {"zone": "undercarriage", "rating": "GREEN", "description": "Track sag 35mm, within spec"},
+        {"zone": "cooling", "rating": "GREEN", "description": "Coolant level normal, no leaks"},
+        {"zone": "boom_arm", "rating": "GREEN", "description": "No cracks, cylinders dry"},
+        {"zone": "bucket", "rating": "GREEN", "description": "Cutting edge good, teeth intact"},
+        {"zone": "engine", "rating": "GREEN", "description": "Oil level good, belts tight"},
+        {"zone": "cab", "rating": "GREEN", "description": "Gauges normal, mirrors intact"},
+        {"zone": "structural", "rating": "GREEN", "description": "Frame clean, no cracks"}
+      ],
+      "summary": "All systems nominal at 2400 hours."
+    },
+    {
+      "inspection_id": "INS-20250807-001",
+      "timestamp": "2025-08-07T09:30:00Z",
+      "operating_hours": 2600,
+      "technician": "TECH-001",
+      "duration_minutes": 20,
+      "coverage_percent": 100,
+      "findings": [
+        {"zone": "hydraulics", "rating": "GREEN", "description": "Hoses good, fittings dry"},
+        {"zone": "undercarriage", "rating": "GREEN", "description": "Track sag 36mm, normal"},
+        {"zone": "cooling", "rating": "GREEN", "description": "Coolant at max, system clean"},
+        {"zone": "boom_arm", "rating": "GREEN", "description": "Clean, no issues"},
+        {"zone": "bucket", "rating": "GREEN", "description": "Cutting edge 70% remaining"},
+        {"zone": "engine", "rating": "GREEN", "description": "Running smooth, no leaks"},
+        {"zone": "cab", "rating": "GREEN", "description": "All systems functional"},
+        {"zone": "structural", "rating": "GREEN", "description": "No issues"}
+      ],
+      "summary": "All systems nominal at 2600 hours."
+    },
+    {
+      "inspection_id": "INS-20251114-001",
+      "timestamp": "2025-11-14T11:00:00Z",
+      "operating_hours": 2750,
+      "technician": "TECH-002",
+      "duration_minutes": 25,
+      "coverage_percent": 100,
+      "findings": [
+        {"zone": "hydraulics", "rating": "YELLOW", "description": "Minor seep at boom pivot fitting, not dripping"},
+        {"zone": "undercarriage", "rating": "YELLOW", "description": "Left track sag appears ~45mm, getting tight"},
+        {"zone": "cooling", "rating": "GREEN", "description": "Coolant level normal"},
+        {"zone": "boom_arm", "rating": "GREEN", "description": "Clean, cylinders dry"},
+        {"zone": "bucket", "rating": "GREEN", "description": "Cutting edge 55% remaining"},
+        {"zone": "engine", "rating": "GREEN", "description": "Oil good, belts good"},
+        {"zone": "cab", "rating": "GREEN", "description": "Normal"},
+        {"zone": "structural", "rating": "GREEN", "description": "No issues"}
+      ],
+      "summary": "Two findings: hydraulic seep at boom pivot (monitor), left track tension increasing (monitor). Seep not yet resolved."
+    },
+    {
+      "inspection_id": "INS-20260115-001",
+      "timestamp": "2026-01-15T08:45:00Z",
+      "operating_hours": 2800,
+      "technician": "TECH-001",
+      "duration_minutes": 23,
+      "coverage_percent": 100,
+      "findings": [
+        {"zone": "hydraulics", "rating": "YELLOW", "description": "Seep at boom pivot persists, slight increase from Nov"},
+        {"zone": "undercarriage", "rating": "YELLOW", "description": "Left track sag ~48mm, overtensioned trend continuing"},
+        {"zone": "cooling", "rating": "YELLOW", "description": "Coolant level approaching min mark, flush due at 3000h"},
+        {"zone": "boom_arm", "rating": "GREEN", "description": "No cracks"},
+        {"zone": "bucket", "rating": "GREEN", "description": "Cutting edge 45% remaining"},
+        {"zone": "engine", "rating": "GREEN", "description": "Running well"},
+        {"zone": "cab", "rating": "GREEN", "description": "All functional"},
+        {"zone": "structural", "rating": "GREEN", "description": "Clean"}
+      ],
+      "summary": "Hydraulic seep persists and growing. Track tension worsening. Coolant low — flush at 3000h. Three items to monitor."
+    }
+  ],
+  "fleet_stats": {
+    "CAT_325": {
+      "total_units": 47,
+      "avg_hours": 2900,
+      "common_failures_at_2800_3000h": {
+        "hydraulics": {"failure_rate_pct": 68, "common_issue": "hose failure at boom pivot"},
+        "undercarriage": {"failure_rate_pct": 58, "common_issue": "track wear requiring adjustment or replacement", "avg_replacement_hours": 3100},
+        "cooling": {"failure_rate_pct": 41, "common_issue": "coolant flush overdue"},
+        "structural": {"failure_rate_pct": 12, "common_issue": "surface rust on frame members"},
+        "engine": {"failure_rate_pct": 15, "common_issue": "belt wear"},
+        "cab": {"failure_rate_pct": 8, "common_issue": "mirror damage"}
+      }
+    }
+  }
+}
