@@ -226,6 +226,20 @@ Return ONLY valid JSON:
 }}\
 """
 
+SMCS_CONTEXT = """\
+SMCS Code Reference (CAT 325) — pick the closest code and include "smcs_code" in your JSON:
+1000=Engine | 1050=Turbocharger | 1300=Cooling System | 3000=Electrical
+4000=Undercarriage | 4050=Track Rollers | 4051=Track Shoes | 4055=Idlers | 4056=Sprockets
+5000=Hydraulic System | 5050=Pilot Hydraulic | 5060=Hydraulic Cylinders | 5070=Hydraulic Hoses
+6000=Boom/Stick Structure | 6500=Swing System | 7000=Implements | 7050=Bucket
+If uncertain, use the group-level code (e.g. 4000 instead of 4050).
+
+Severity definitions:
+GREEN: Component within normal parameters. No visible defects. Action: log for baseline.
+YELLOW: Early-stage wear, minor leakage, or cosmetic damage that may progress. Action: schedule at next PM.
+RED: Active failure, major structural damage, safety hazard, or fluid leak under pressure. Action: immediate attention.\
+"""
+
 REPORT_PROMPT = """\
 You are generating a final TA-1 inspection report for a CAT 325.
 
