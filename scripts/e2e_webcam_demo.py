@@ -1078,17 +1078,6 @@ def _local_transcribe(whisper_model, audio_array, shared, spec_kb):
             speak("No frame available yet.")
         return
 
-    if shared.get("inspection_mode", "general") != "cat":
-        frame_b64 = shared.get("last_frame_b64")
-        if frame_b64:
-            with shared_lock:
-                shared["pending_actions"].append(("voice_question", {
-                    "type": "voice_question",
-                    "text": transcript,
-                    "frame": frame_b64,
-                }))
-        return
-
     from backend.nlp import extract_finding
     finding = extract_finding(transcript)
     if finding["zone"]:
@@ -1181,6 +1170,7 @@ def main():
         print(f"Cannot open camera device {args.camera}", file=sys.stderr)
         sys.exit(1)
 
+    cv2.namedWindow("Dronecat", cv2.WINDOW_NORMAL)
     print(f"Camera {args.camera} open. Connecting to {url}")
     print(f"Unit: {unit_info['model']} | {unit_info['serial']} | {unit_info['hours']}h")
     print(f"Mode: {shared['inspection_mode'].upper()}")

@@ -2,6 +2,9 @@ import modal
 
 app = modal.App("dronecat")
 
+# Persistent volume for trained model weights shared between training and inference.
+models_volume = modal.Volume.from_name("dronecat-models", create_if_missing=True)
+
 
 def _download_yolo():
     from ultralytics import YOLO

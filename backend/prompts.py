@@ -33,9 +33,67 @@ try:
 except FileNotFoundError:
     _spec_kb = {}
 
+SPEC_KB = _spec_kb  # public alias for orchestrator import
+
 SYSTEM_PROMPT = _sub_section_data["baseline"]["system_prompt"]
 USER_PROMPT = _sub_section_data["baseline"]["user_prompt"]
 FRAMES_ONLY_PROMPT = _sub_section_data["baseline"]["frames_only_prompt"]
+
+
+def format_session_context(zone_status, seen_zones, total_zones=15):
+    """Compact session progress injected into every VLM call so the model
+    knows what has already been assessed and what remains."""
+    if not zone_status and not seen_zones:
+        return "Inspection just started — no zones assessed yet."
+
+    icon = {"RED": "RED", "YELLOW": "YELLOW", "GREEN": "GREEN"}
+    assessed = [f"{z}:{icon.get(s, s)}" for z, s in sorted(zone_status.items())]
+    pending = sorted(seen_zones - set(zone_status.keys()))
+    remaining = total_zones - len(seen_zones)
+
+    parts = []
+    if assessed:
+        parts.append("Assessed: " + ", ".join(assessed[:10]))
+    if pending:
+        parts.append("Seen/pending VLM: " + ", ".join(pending[:5]))
+    parts.append(f"{remaining}/{total_zones} zones not yet visited.")
+
+    return (
+        f"Session progress ({len(zone_status)}/{total_zones} zones assessed): "
+        + " | ".join(parts)
+    )
+
+
+def format_spec_context(detected_zone_ids, spec_kb):
+    """Inject CAT 325 spec text for zones currently visible in the frame."""
+    if not spec_kb or not detected_zone_ids:
+        return ""
+    specs = []
+    for zone_id in detected_zone_ids:
+        entry = spec_kb.get(zone_id)
+        if entry:
+            failures = ", ".join(entry.get("failure_modes", [])[:3])
+            specs.append(
+                f"[{zone_id}] {entry['spec_text']} "
+                f"Common failures: {failures}. Ref: {entry.get('procedure', '')}."
+            )
+    return ("CAT 325 specs for visible zones:\n" + "\n".join(specs)) if specs else ""
+
+
+def format_yolo_context(detections):
+    """Format YOLO detections into a grounding context string for the VLM prompt."""
+    if not detections:
+        return "YOLO detected: nothing in this frame."
+    items = []
+    for d in detections:
+        label = d.get("label", "unknown")
+        conf = d.get("confidence", 0)
+        zone = d.get("zone")
+        entry = f"{label} ({conf:.0%} conf)"
+        if zone:
+            entry += f" → zone: {zone}"
+        items.append(entry)
+    return "YOLO detected: " + ", ".join(items) + "."
 
 
 def get_sub_section_prompt(prompt_key):

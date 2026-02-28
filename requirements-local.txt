@@ -1,0 +1,13 @@
+# Local client dependencies only.
+# Backend packages (vllm, torch, transformers, ultralytics, etc.) run inside Modal containers.
+modal
+opencv-python
+websockets
+numpy
+torch
+sounddevice
+silero-vad
+faster-whisper
+fpdf2
+python-dotenv
+requests
