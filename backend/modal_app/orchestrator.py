@@ -619,11 +619,15 @@ def web():
                     session["latest_frame_id"] = frame_id
                     session["latest_frame_client_ts"] = frame_client_ts
 
-                    # Relay frame to viewers
+                    # Relay frame to viewers (cheap)
                     await _broadcast(session, {
                         "type": "frame", "data": frame_b64,
                         "frame_id": frame_id,
                     })
+
+                    # Only run GPU inference when at least one viewer is connected
+                    if not session["viewer_wss"]:
+                        continue
 
                     if session["yolo_busy"]:
                         session["pending_frame"] = (frame_b64, frame_id, frame_client_ts)
@@ -761,6 +765,7 @@ def web():
             await ws.close()
             return
 
+        was_empty = len(session["viewer_wss"]) == 0
         session["viewer_wss"].append(ws)
         await ws.send_json({
             "type": "session_state",
@@ -772,6 +777,17 @@ def web():
             "unit_model": session.get("unit_model"),
             "fleet_tag": session.get("fleet_tag"),
         })
+
+        # Notify SDK that an operator connected — inference will begin
+        if was_empty and session.get("ingest_ws"):
+            try:
+                await session["ingest_ws"].send_json({
+                    "type": "viewer_joined",
+                    "viewers": len(session["viewer_wss"]),
+                })
+            except Exception:
+                pass
+            print(f"[SESSION {session_id}] First viewer joined — GPU inference enabled")
 
         try:
             while True:

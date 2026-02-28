@@ -40,7 +40,7 @@ interface SessionState {
   send: (msg: Record<string, unknown>) => void;
 }
 
-const BACKEND_WS = process.env.NEXT_PUBLIC_BACKEND_WS || "wss://gitbolt--dronecat-web.modal.run";
+const BACKEND_WS = process.env.NEXT_PUBLIC_BACKEND_WS || "wss://heyaabis--dronecat-web.modal.run";
 
 /** Store a finding in Supermemory via our API route. Fire-and-forget. */
 function storeMemory(unitSerial: string, finding: string, zone: string, severity: string) {

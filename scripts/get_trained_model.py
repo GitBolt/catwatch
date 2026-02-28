@@ -39,4 +39,4 @@ if not any_downloaded:
     sys.exit(1)
 
 print(f"\nDone. Redeploy to activate the new model:")
-print("  modal deploy modal_deploy.py")
+print("  modal deploy backend/modal_app/orchestrator.py")

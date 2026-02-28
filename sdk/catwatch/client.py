@@ -60,13 +60,39 @@ class CatWatch:
         if fleet_tag:
             body["fleet_tag"] = fleet_tag
         data = json.dumps(body).encode()
+        url = f"{self._server}/api/sessions"
         req = urllib.request.Request(
-            f"{self._server}/api/sessions",
+            url,
             data=data,
             headers={"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req) as resp:
-            result = json.loads(resp.read())
+        try:
+            with urllib.request.urlopen(req) as resp:
+                result = json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            body = ""
+            try:
+                body = e.read().decode()
+            except Exception:
+                pass
+            if e.code == 401:
+                raise RuntimeError(
+                    f"Invalid API key. Create one at your dashboard (API Keys page)."
+                ) from None
+            elif e.code == 404:
+                raise RuntimeError(
+                    f"Backend not reachable at {self._server} (404). "
+                    f"Is it deployed? Try: curl {self._server}/health"
+                ) from None
+            else:
+                raise RuntimeError(
+                    f"Backend error {e.code}: {body or e.reason}"
+                ) from None
+        except urllib.error.URLError as e:
+            raise RuntimeError(
+                f"Cannot reach backend at {self._server} — {e.reason}. "
+                f"Check your internet connection and server URL."
+            ) from None
 
         self._session_id = result["session_id"]
         self._dashboard_url = result.get("dashboard_url", "")
@@ -78,6 +104,10 @@ class CatWatch:
         # Start WebSocket protocol
         self._protocol = Protocol(self._ws_url, self._api_key)
         self._protocol.start()
+
+        print(f"[catwatch] Session created: {self._session_id}")
+        print(f"[catwatch] Dashboard: {self._dashboard_url}")
+        print(f"[catwatch] Waiting for operator to open dashboard — no GPU usage until then")
 
     def on_detection(self, fn):
         """Decorator: called with detection message dict."""
@@ -158,6 +188,13 @@ class CatWatch:
                     if msg is None:
                         break
                     msg_type = msg.get("type")
+
+                    # Built-in status messages
+                    if msg_type == "viewer_joined":
+                        print(f"[catwatch] Operator connected — inspection active (GPU inference started)")
+                    elif msg_type == "auth_ok":
+                        pass  # already printed on connect
+
                     cb = self._callbacks.get(msg_type)
                     if cb:
                         try:

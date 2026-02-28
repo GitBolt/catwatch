@@ -1,4 +1,4 @@
-DEFAULT_SERVER = "https://gitbolt--dronecat-web.modal.run"
+DEFAULT_SERVER = "https://heyaabis--dronecat-web.modal.run"
 FRAME_INTERVAL = 0.2
 FORCE_SEND_MS = 350
 JPEG_QUALITY = 85
