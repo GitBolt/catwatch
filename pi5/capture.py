@@ -20,7 +20,7 @@ class PicamCapture:
     def health_check(self) -> bool:
         try:
             r = requests.get(self._snapshot_url, timeout=self.timeout)
-            return r.status_code == 200
+            return r.status_code < 500
         except Exception:
             return False
 

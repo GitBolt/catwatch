@@ -41,3 +41,9 @@ def test_health_check_returns_false_when_unreachable():
     with patch("pi5.capture.requests.get", side_effect=Exception("timeout")):
         cap = PicamCapture("http://fake-pi:8080", skip_health_check=True)
         assert cap.health_check() is False
+
+
+def test_init_raises_when_pi_unreachable():
+    with patch("pi5.capture.requests.get", side_effect=Exception("unreachable")):
+        with pytest.raises(RuntimeError, match="Cannot reach picam"):
+            PicamCapture("http://fake-pi:8080")
