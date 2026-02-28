@@ -40,15 +40,24 @@ async def validate_api_key(key: str):
     return None
 
 
-async def create_session(session_id: str, api_key_id: str, user_id: str, mode: str = "general"):
+async def create_session(
+    session_id: str,
+    api_key_id: str,
+    user_id: str,
+    mode: str = "general",
+    unit_serial: str = None,
+    model: str = None,
+    fleet_tag: str = None,
+):
     """Insert a new inspection session."""
     pool = await get_pool()
     await pool.execute(
         """
-        INSERT INTO "Session" (id, "apiKeyId", "userId", mode, status, "createdAt")
-        VALUES ($1, $2, $3, $4, 'active', NOW())
+        INSERT INTO "Session" (id, "apiKeyId", "userId", mode, status, "createdAt",
+                               "unitSerial", model, "fleetTag")
+        VALUES ($1, $2, $3, $4, 'active', NOW(), $5, $6, $7)
         """,
-        session_id, api_key_id, user_id, mode,
+        session_id, api_key_id, user_id, mode, unit_serial, model, fleet_tag,
     )
 
 

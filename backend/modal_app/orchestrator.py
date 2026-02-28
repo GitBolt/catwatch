@@ -362,6 +362,9 @@ def web():
         body = await request.json()
         api_key = body.get("api_key", "")
         mode = body.get("mode", "general")
+        unit_serial = body.get("unit_serial")
+        unit_model = body.get("model")
+        fleet_tag = body.get("fleet_tag")
 
         if not api_key:
             return JSONResponse({"error": "api_key required"}, status_code=400)
@@ -372,7 +375,10 @@ def web():
 
         session_id = secrets.token_hex(6)  # 12-char hex like "a1b2c3d4e5f6"
 
-        await db_create_session(session_id, key_info["api_key_id"], key_info["user_id"], mode)
+        await db_create_session(
+            session_id, key_info["api_key_id"], key_info["user_id"], mode,
+            unit_serial=unit_serial, model=unit_model, fleet_tag=fleet_tag,
+        )
 
         # Initialize in-memory session state
         _sessions[session_id] = {
@@ -380,6 +386,10 @@ def web():
             "api_key_id": key_info["api_key_id"],
             "user_id": key_info["user_id"],
             "mode": mode,
+            "unit_serial": unit_serial,
+            "unit_model": unit_model,
+            "fleet_tag": fleet_tag,
+            "unit_context": None,   # populated by frontend via Supermemory
             "ingest_ws": None,
             "viewer_wss": [],
             "seen_zones": set(),
@@ -395,7 +405,7 @@ def web():
             "pending_frame": None,
         }
 
-        dashboard_host = os.environ.get("DASHBOARD_URL", "https://catwatch.vercel.app")
+        dashboard_host = os.environ.get("DASHBOARD_URL", "https://catwatch-hackillinois.vercel.app")
         ws_host = os.environ.get("MODAL_WS_HOST", request.base_url.hostname)
         scheme = "wss" if request.url.scheme == "https" else "ws"
 
@@ -453,6 +463,10 @@ def web():
                 persona, schema = build_zone_inspection_prompt(
                     session["last_vlm_zone"], mode=session["mode"]
                 )
+                # Inject unit memory context from Supermemory (sent by frontend)
+                unit_ctx = session.get("unit_context")
+                if unit_ctx:
+                    persona = f"{persona}\n\n--- Unit Memory ---\n{unit_ctx}"
                 analysis = await asyncio.wait_for(
                     asyncio.to_thread(qwen.analyze_frame.remote, frame_b64, persona, schema),
                     timeout=120,
@@ -641,8 +655,51 @@ def web():
                         session["mode"] = requested_mode
                     await send_all({"type": "mode", "mode": session["mode"]})
 
+                elif msg_type == "unit_context":
+                    # Frontend sends compiled unit history from Supermemory
+                    session["unit_context"] = msg.get("context", "")
+                    print(f"[MEMORY] Received unit context for session {session['id']}: {str(session['unit_context'])[:100]}")
+
+                elif msg_type == "request_zone_brief":
+                    asyncio.create_task(_run_zone_brief_session(
+                        session, msg, send_all, qwen,
+                    ))
+
         except WebSocketDisconnect:
             pass
+
+    async def _run_zone_brief_session(session, msg, send_all, qwen_ref):
+        """Run zone brief for a platform session, using Supermemory context if available."""
+        zone_id = msg["zone"]
+        hours = msg.get("hours", 0)
+        spec_knowledge = msg.get("spec_knowledge", "")
+        # Frontend can pass enriched history from Supermemory
+        unit_history = msg.get("unit_history", "No prior history available")
+        fleet_stats = msg.get("fleet_stats", "No fleet data available")
+        try:
+            from backend.prompts import BRIEF_PROMPT
+            from backend.zone_config import ZONE_PROMPT_MAP
+            prompt_key = ZONE_PROMPT_MAP.get(zone_id, "")
+            sub_title = prompt_key.replace("_", " ").title()
+            sensor = session.get("sensor_snapshot", {})
+            prompt = BRIEF_PROMPT.format(
+                zone=zone_id, hours=hours, sub_section_title=sub_title,
+                unit_history=unit_history,
+                fleet_stats=fleet_stats,
+                spec_knowledge=spec_knowledge,
+                audio_score=sensor.get("audio", {}).get("anomaly_score", 0),
+                ir_score=sensor.get("ir", {}).get("anomaly_score", 0),
+                light_quality=sensor.get("light", {}).get("quality", "unknown"),
+            )
+            brief = await asyncio.wait_for(
+                asyncio.to_thread(qwen_ref.zone_brief.remote, prompt), timeout=60,
+            )
+        except asyncio.TimeoutError:
+            brief = "Zone brief timed out — VLM may still be warming up."
+        except Exception as e:
+            print(f"[BRIEF] Error for {zone_id}: {e}")
+            brief = f"Brief error: {str(e)[:60]}"
+        await send_all({"type": "zone_brief", "zone": zone_id, "text": brief})
 
     # ── WebSocket: SDK ingest ─────────────────────────────────────────────
 
@@ -711,6 +768,9 @@ def web():
             "mode": session["mode"],
             "zones_seen": len(session["seen_zones"]),
             "active": session["ingest_ws"] is not None,
+            "unit_serial": session.get("unit_serial"),
+            "unit_model": session.get("unit_model"),
+            "fleet_tag": session.get("fleet_tag"),
         })
 
         try:
@@ -719,8 +779,13 @@ def web():
                 msg = json.loads(raw)
                 msg_type = msg.get("type")
 
+                # Accept unit_context from frontend (Supermemory profile)
+                if msg_type == "unit_context":
+                    session["unit_context"] = msg.get("context", "")
+                    print(f"[MEMORY] Viewer sent unit context: {str(session['unit_context'])[:100]}")
+
                 # Forward viewer actions to the pipeline
-                if msg_type in ("voice_question", "generate_report", "set_mode", "request_vlm_analysis"):
+                if msg_type in ("voice_question", "generate_report", "set_mode", "request_vlm_analysis", "request_zone_brief"):
                     ingest = session.get("ingest_ws")
                     if ingest:
                         # Inject into pipeline by processing directly
@@ -734,6 +799,16 @@ def web():
                             if requested_mode in ("general", "cat"):
                                 session["mode"] = requested_mode
                             await _broadcast(session, {"type": "mode", "mode": session["mode"]})
+                        elif msg_type == "request_zone_brief":
+                            async def _viewer_send_all(m):
+                                try:
+                                    await ingest.send_json(m)
+                                except Exception:
+                                    pass
+                                await _broadcast(session, m)
+                            asyncio.create_task(_run_zone_brief_session(
+                                session, msg, _viewer_send_all, qwen,
+                            ))
 
         except WebSocketDisconnect:
             pass

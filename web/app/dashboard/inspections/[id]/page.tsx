@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { SEVERITY_COLORS, ZONE_LABELS, type ZoneId } from "@/lib/constants";
 import Link from "next/link";
 import { DownloadPDFButton } from "@/components/download-pdf-button";
+import { FleetSimilarFindings } from "@/components/fleet-similar-findings";
 
 export default async function InspectionDetailPage({
   params,
@@ -95,6 +96,17 @@ export default async function InspectionDetailPage({
           value={`${Math.round(inspectionSession.coveragePct)}%`}
         />
       </div>
+      {inspectionSession.unitSerial && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+          <MetaCard label="Unit Serial" value={inspectionSession.unitSerial} />
+          {inspectionSession.model && (
+            <MetaCard label="Model" value={inspectionSession.model} />
+          )}
+          {inspectionSession.fleetTag && (
+            <MetaCard label="Fleet" value={inspectionSession.fleetTag} />
+          )}
+        </div>
+      )}
 
       {/* Findings */}
       <div>
@@ -142,6 +154,16 @@ export default async function InspectionDetailPage({
           </div>
         )}
       </div>
+
+      {/* Fleet similar findings */}
+      <FleetSimilarFindings
+        unitSerial={inspectionSession.unitSerial ?? null}
+        findings={inspectionSession.findings.map((f) => ({
+          zone: f.zone,
+          rating: f.rating,
+          description: f.description,
+        }))}
+      />
 
       {/* Report */}
       {inspectionSession.report && (

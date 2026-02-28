@@ -47,12 +47,19 @@ class CatWatch:
     def connected(self):
         return self._protocol.connected if self._protocol else False
 
-    def connect(self, source=0, mode="general"):
+    def connect(self, source=0, mode="general", unit_serial=None, model=None, fleet_tag=None):
         """Create a session and connect to the inspection backend."""
         self._mode = mode
 
         # POST /api/sessions to create session
-        data = json.dumps({"api_key": self._api_key, "mode": mode}).encode()
+        body = {"api_key": self._api_key, "mode": mode}
+        if unit_serial:
+            body["unit_serial"] = unit_serial
+        if model:
+            body["model"] = model
+        if fleet_tag:
+            body["fleet_tag"] = fleet_tag
+        data = json.dumps(body).encode()
         req = urllib.request.Request(
             f"{self._server}/api/sessions",
             data=data,
