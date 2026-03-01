@@ -117,3 +117,18 @@ async def end_session(session_id: str, zones_seen: int = 0, coverage_pct: float 
         """,
         session_id, zones_seen, coverage_pct,
     )
+
+
+async def close_active_sessions_for_user(user_id: str):
+    """Close all active sessions for a user. Returns list of closed session IDs."""
+    pool = await get_pool()
+    rows = await pool.fetch(
+        """
+        UPDATE "Session"
+        SET status = 'completed', "endedAt" = NOW()
+        WHERE "userId" = $1 AND status = 'active'
+        RETURNING id
+        """,
+        user_id,
+    )
+    return [row["id"] for row in rows]

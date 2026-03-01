@@ -447,7 +447,7 @@ def web():
 
     @api.post("/api/sessions")
     async def create_session(request: Request):
-        from .db import validate_api_key, create_session as db_create_session
+        from .db import validate_api_key, create_session as db_create_session, close_active_sessions_for_user
 
         body = await request.json()
         api_key = body.get("api_key", "")
@@ -463,6 +463,29 @@ def web():
         key_info = await validate_api_key(api_key)
         if not key_info:
             return JSONResponse({"error": "Invalid API key"}, status_code=401)
+
+        # Close any existing active sessions for this user
+        closed_ids = await close_active_sessions_for_user(key_info["user_id"])
+        for old_id in closed_ids:
+            old_session = _sessions.pop(old_id, None)
+            if old_session:
+                for vws in list(old_session.get("viewer_wss", [])):
+                    try:
+                        await vws.send_json({"type": "session_ended", "data": {
+                            "session_id": old_id, "zones_inspected": len(old_session.get("seen_zones", set())),
+                            "total_zones": len(old_session.get("dynamic_zones", [])) or 15,
+                            "coverage_pct": 0, "findings_count": 0, "mode": old_session.get("mode", "general"),
+                        }})
+                        await vws.close()
+                    except Exception:
+                        pass
+                iws = old_session.get("ingest_ws")
+                if iws:
+                    try:
+                        await iws.close()
+                    except Exception:
+                        pass
+                print(f"[SESSION] Force-closed stale session {old_id} for user {key_info['user_id']}")
 
         session_id = secrets.token_hex(6)
 
