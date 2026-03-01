@@ -1,9 +1,8 @@
 import cv2
 
 
-def blur_score(frame):
-    """Laplacian variance -- higher means sharper."""
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+def blur_score(gray):
+    """Laplacian variance -- higher means sharper. Expects grayscale input."""
     return cv2.Laplacian(gray, cv2.CV_64F).var()
 
 

@@ -354,7 +354,7 @@ class CatWatch:
                 now = time.time()
                 elapsed_ms = (now - last_send) * 1000
 
-                blur = blur_score(frame)
+                blur = blur_score(gray)
                 mot = motion_score(self._prev_gray, gray)
                 self._prev_gray = gray
 

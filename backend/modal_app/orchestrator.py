@@ -16,6 +16,111 @@ from .qwen_vl import Qwen25VLInspector
 
 VLM_ANALYSIS_INTERVAL_S = 3.0
 
+# ── Multi-signal correlation rules ────────────────────────────────────────
+# (yolo_label_keywords, vlm_finding_keywords, event_name, description)
+_CORRELATION_RULES = [
+    (
+        {"hydraulic_hose", "hydraulic_cylinder", "hose", "cylinder"},
+        {"leak", "stain", "fluid", "drip", "wet", "seep", "puddle", "oil"},
+        "hydraulic_leak",
+        "Hydraulic component + fluid evidence — possible active leak",
+    ),
+    (
+        {"track_shoe", "track_roller", "track_chain", "sprocket", "idler", "track"},
+        {"wear", "loose", "missing", "crack", "gap", "uneven", "sag", "stretched"},
+        "track_wear",
+        "Track system component showing wear or damage",
+    ),
+    (
+        {"bucket", "bucket_teeth", "cutting_edge", "teeth"},
+        {"worn", "missing", "broken", "crack", "rounded", "short"},
+        "ground_tool_wear",
+        "Ground-engaging tool wear detected",
+    ),
+    (
+        {"cab_glass", "cab", "windshield", "mirror"},
+        {"crack", "chip", "broken", "shatter", "obstruct", "damage", "visibility"},
+        "cab_visibility",
+        "Cab glass or mirror damage — operator visibility concern",
+    ),
+    (
+        {"engine_compartment", "exhaust", "engine", "radiator", "cooling"},
+        {"smoke", "overheat", "discolor", "hot", "leak", "coolant", "steam", "residue"},
+        "engine_thermal",
+        "Engine/cooling area thermal or fluid anomaly",
+    ),
+    (
+        {"step", "handrail", "ladder"},
+        {"loose", "missing", "bent", "broken", "slip", "grease", "damage"},
+        "access_safety",
+        "Access point hazard — steps or handrails compromised",
+    ),
+]
+
+_MAX_ANALYSIS_HISTORY = 10
+_INSIGHT_COOLDOWN_S = 15.0
+
+
+def _correlate_signals(yolo_labels, vlm_text, vlm_severity, recent_insights):
+    """Match YOLO labels against VLM text. Returns triggered insight dicts."""
+    if not yolo_labels or not vlm_text:
+        return []
+    now = time.time()
+    lower_text = vlm_text.lower()
+    label_set = {l.lower().replace(" ", "_") for l in yolo_labels}
+    results = []
+    for rule_labels, rule_keywords, event_name, description in _CORRELATION_RULES:
+        if now - recent_insights.get(event_name, 0) < _INSIGHT_COOLDOWN_S:
+            continue
+        label_match = label_set & rule_labels
+        keyword_match = [kw for kw in rule_keywords if kw in lower_text]
+        if label_match and keyword_match:
+            recent_insights[event_name] = now
+            results.append({
+                "event": event_name,
+                "description": description,
+                "components": sorted(label_match),
+                "evidence_keywords": keyword_match[:3],
+                "vlm_severity": vlm_severity,
+            })
+    return results
+
+
+def _compute_zone_trend(history_list):
+    """Compute severity trend from a zone's analysis history."""
+    if len(history_list) < 2:
+        return None
+    counts = {"RED": 0, "YELLOW": 0, "GREEN": 0}
+    total_conf = 0.0
+    for entry in history_list:
+        sev = entry.get("severity", "GREEN")
+        if sev in counts:
+            counts[sev] += 1
+        total_conf += entry.get("confidence", 0.5)
+    n = len(history_list)
+    avg_conf = round(total_conf / n, 2)
+
+    sev_val = {"GREEN": 0, "YELLOW": 1, "RED": 2}
+    recent = [sev_val.get(e["severity"], 0) for e in history_list[-3:]]
+    early = [sev_val.get(e["severity"], 0) for e in history_list[:3]]
+    r_avg = sum(recent) / len(recent)
+    e_avg = sum(early) / len(early)
+    if r_avg > e_avg + 0.3:
+        drift = "worsening"
+    elif r_avg < e_avg - 0.3:
+        drift = "improving"
+    elif counts["RED"] > 0 and counts["GREEN"] > 0 and counts["RED"] + counts["GREEN"] > counts["YELLOW"]:
+        drift = "inconsistent"
+    else:
+        drift = "stable"
+    return {
+        "severity_counts": counts,
+        "confidence_avg": avg_conf,
+        "drift": drift,
+        "sample_count": n,
+    }
+
+
 _sessions = {}
 
 
@@ -390,6 +495,9 @@ def web():
             "equipment_info": None,
             "equipment_id_done": False,
             "dynamic_zones": [],
+            "analysis_history": {},
+            "last_yolo_labels": set(),
+            "insight_cooldowns": {},
         }
 
         dashboard_host = os.environ.get("DASHBOARD_URL", "https://catwatch-hackillinois.vercel.app")
@@ -508,6 +616,33 @@ def web():
                         except Exception as e:
                             print(f"[DB] save_finding error: {e}")
 
+                # ── Analysis history + severity trend ─────────────────
+                zone_key = analysis.get("zone") or "_global"
+                hist = session["analysis_history"].setdefault(zone_key, [])
+                hist.append({
+                    "severity": severity,
+                    "confidence": analysis.get("confidence", 0.5),
+                    "ts": time.time(),
+                })
+                if len(hist) > _MAX_ANALYSIS_HISTORY:
+                    session["analysis_history"][zone_key] = hist[-_MAX_ANALYSIS_HISTORY:]
+                trend = _compute_zone_trend(hist)
+                if trend:
+                    await send_all({"type": "zone_trend", "zone": zone_key, "trend": trend})
+
+                # ── Multi-signal correlation ──────────────────────────
+                vlm_text = analysis.get("description", "") + " " + " ".join(
+                    str(f) for f in analysis.get("findings", []) if f
+                )
+                insights = _correlate_signals(
+                    session.get("last_yolo_labels", set()),
+                    vlm_text, severity,
+                    session["insight_cooldowns"],
+                )
+                for insight in insights:
+                    await send_all({"type": "insight", "data": insight})
+                    print(f"[INSIGHT] {insight['event']}: {insight['description']}")
+
             except asyncio.TimeoutError:
                 try:
                     await send_all({
@@ -583,6 +718,8 @@ def web():
                         session["seen_zones"].add(zone_id)
                         zone_events.append(zone_id)
 
+                session["last_yolo_labels"] = {det["label"] for det in detections if det.get("label")}
+
                 total_z = len(session["dynamic_zones"]) or 15
                 det_msg = {
                     "type": "detection", "detections": detections,
@@ -617,8 +754,7 @@ def web():
                 if session["pending_frame"]:
                     pf = session["pending_frame"]
                     session["pending_frame"] = None
-                    pf_b64 = base64.b64encode(pf[0]).decode("ascii")
-                    asyncio.create_task(process_yolo_session(pf_b64, pf[1], pf[2]))
+                    asyncio.create_task(process_yolo_session(pf[0], pf[1], pf[2]))
 
         _MODE_MAP = {0: "general", 1: "cat"}
 
@@ -652,11 +788,10 @@ def web():
                         continue
 
                     if session["yolo_busy"]:
-                        session["pending_frame"] = (jpeg_bytes, frame_id, frame_client_ts)
+                        session["pending_frame"] = (session["latest_frame_b64"], frame_id, frame_client_ts)
                     else:
                         session["pending_frame"] = None
-                        frame_b64 = base64.b64encode(jpeg_bytes).decode("ascii")
-                        asyncio.create_task(process_yolo_session(frame_b64, frame_id, frame_client_ts))
+                        asyncio.create_task(process_yolo_session(session["latest_frame_b64"], frame_id, frame_client_ts))
 
                     continue
 
@@ -679,7 +814,7 @@ def web():
 
                     jpeg_bytes = base64.b64decode(frame_b64)
                     viewer_payload = struct.pack("!I", frame_id) + jpeg_bytes
-                    await _broadcast_bytes(session, viewer_payload)
+                    asyncio.create_task(_broadcast_bytes(session, viewer_payload))
 
                     if session["viewer_wss"]:
                         if session["yolo_busy"]:
@@ -834,6 +969,9 @@ def web():
                 "equipment_info": None,
                 "equipment_id_done": False,
                 "dynamic_zones": [],
+                "analysis_history": {},
+                "last_yolo_labels": set(),
+                "insight_cooldowns": {},
             }
             _sessions[session_id] = session
             print(f"[SESSION] Recovered session {session_id} from database")
@@ -889,6 +1027,9 @@ def web():
                 "equipment_info": None,
                 "equipment_id_done": False,
                 "dynamic_zones": [],
+                "analysis_history": {},
+                "last_yolo_labels": set(),
+                "insight_cooldowns": {},
             }
             _sessions[session_id] = session
             print(f"[SESSION] Viewer recovered session {session_id} from database")

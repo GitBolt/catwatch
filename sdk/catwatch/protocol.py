@@ -71,14 +71,17 @@ class Protocol:
                     backoff = 2.0
 
                     while self._running:
-                        try:
-                            msg = self._send_q.get(timeout=0.005)
-                            ws.send(msg)
-                        except queue.Empty:
-                            pass
+                        sent = 0
+                        while not self._send_q.empty() and sent < 8:
+                            try:
+                                msg = self._send_q.get_nowait()
+                                ws.send(msg)
+                                sent += 1
+                            except queue.Empty:
+                                break
 
                         try:
-                            raw = ws.recv(timeout=0.005)
+                            raw = ws.recv(timeout=0.002 if sent else 0.005)
                             if isinstance(raw, str):
                                 parsed = json.loads(raw)
                                 if not self._recv_q.full():
