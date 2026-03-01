@@ -46,8 +46,9 @@ export default function DashboardLayout({
               />
             </div>
             <div className="footer-credit">
-              Built by <span className="footer-name">Syed Aabis Akhtar</span> and{" "}
-              <span className="footer-name">Even Chen</span> for{" "}
+              Built by{" "}
+              <a href="https://aabis.dev" target="_blank" rel="noopener noreferrer" className="footer-name">Aabis</a> and{" "}
+              <a href="https://github.com/feeniks01" target="_blank" rel="noopener noreferrer" className="footer-name">Evan</a> for{" "}
               <span className="footer-event">HackIllinois 2026</span>
             </div>
           </div>
