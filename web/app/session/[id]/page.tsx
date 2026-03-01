@@ -134,7 +134,8 @@ export default function LiveSessionPage() {
         <div
           style={{
             position: "relative",
-            flex: 1,
+            flex: "1 1 0",
+            minWidth: 0,
             overflow: "hidden",
             borderRadius: "var(--radius)",
             background: "var(--bg-card)",
@@ -223,9 +224,10 @@ export default function LiveSessionPage() {
         <div
           style={{
             display: "flex",
-            width: 260,
+            width: 300,
+            flexShrink: 0,
             flexDirection: "column",
-            gap: 8,
+            gap: 6,
             overflowY: "auto",
           }}
         >

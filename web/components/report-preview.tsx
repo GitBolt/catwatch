@@ -19,21 +19,22 @@ export function ReportPreview({ inspection }: Props) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    try {
-      const doc = generateInspectionPDF(inspection);
+    let cancelled = false;
+    generateInspectionPDF(inspection).then((doc) => {
+      if (cancelled) return;
       const blob = doc.output("blob");
       const url = URL.createObjectURL(blob);
       setPdfUrl(url);
-      return () => URL.revokeObjectURL(url);
-    } catch (err) {
+    }).catch((err) => {
       console.error("PDF generation failed:", err);
-      setError("Failed to generate PDF.");
-    }
+      if (!cancelled) setError("Failed to generate PDF.");
+    });
+    return () => { cancelled = true; };
   }, [inspection]);
 
-  const download = useCallback(() => {
+  const download = useCallback(async () => {
     try {
-      const doc = generateInspectionPDF(inspection);
+      const doc = await generateInspectionPDF(inspection);
       doc.save(`catwatch-inspection-${inspection.sessionId.slice(0, 8)}.pdf`);
     } catch (err) {
       console.error("PDF download failed:", err);

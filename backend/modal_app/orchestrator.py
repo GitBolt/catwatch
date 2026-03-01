@@ -20,22 +20,28 @@ VLM_ANALYSIS_INTERVAL_S = 3.0
 # (yolo_label_keywords, vlm_finding_keywords, event_name, description)
 _CORRELATION_RULES = [
     (
-        {"hydraulic_hose", "hydraulic_cylinder", "hose", "cylinder"},
-        {"leak", "stain", "fluid", "drip", "wet", "seep", "puddle", "oil"},
+        {"hydraulic_hose", "hydraulic_cylinder", "hose", "cylinder", "hoist_cylinder", "steering_cylinder"},
+        {"leak", "stain", "fluid", "drip", "wet", "seep", "puddle", "oil", "pitting"},
         "hydraulic_leak",
         "Hydraulic component + fluid evidence — possible active leak",
     ),
     (
-        {"track_shoe", "track_roller", "track_chain", "sprocket", "idler", "track"},
-        {"wear", "loose", "missing", "crack", "gap", "uneven", "sag", "stretched"},
-        "track_wear",
-        "Track system component showing wear or damage",
+        {"tire", "rim", "wheel", "lug_nut"},
+        {"wear", "cut", "bulge", "crack", "flat", "tread", "damage", "missing", "loose"},
+        "tire_damage",
+        "Tire or rim damage detected — 63\" OTR tire concern",
     ),
     (
-        {"bucket", "bucket_teeth", "cutting_edge", "teeth"},
-        {"worn", "missing", "broken", "crack", "rounded", "short"},
-        "ground_tool_wear",
-        "Ground-engaging tool wear detected",
+        {"dump_body", "tailgate", "liner"},
+        {"crack", "dent", "wear", "damage", "hole", "bent", "weld", "fatigue"},
+        "dump_body_wear",
+        "Dump body structural damage or liner wear detected",
+    ),
+    (
+        {"suspension_strut", "strut"},
+        {"leak", "oil", "low", "sag", "damage", "nitrogen", "ride_height"},
+        "suspension_issue",
+        "Suspension strut anomaly — possible oil leak or low charge",
     ),
     (
         {"cab_glass", "cab", "windshield", "mirror"},
@@ -44,7 +50,7 @@ _CORRELATION_RULES = [
         "Cab glass or mirror damage — operator visibility concern",
     ),
     (
-        {"engine_compartment", "exhaust", "engine", "radiator", "cooling"},
+        {"engine_compartment", "exhaust", "engine", "radiator", "cooling", "turbocharger"},
         {"smoke", "overheat", "discolor", "hot", "leak", "coolant", "steam", "residue"},
         "engine_thermal",
         "Engine/cooling area thermal or fluid anomaly",
@@ -284,12 +290,11 @@ def web():
                 now = datetime.utcnow()
                 all_findings = [f for fs in zone_findings.values() for f in (fs if isinstance(fs, list) else [fs])]
                 prompt = REPORT_PROMPT.format(
-                    model=msg.get("model", "CAT 325"), serial=msg.get("serial", ""),
+                    model=msg.get("model", "Unknown"), serial=msg.get("serial", ""),
                     hours=msg.get("hours", 0), technician=msg.get("technician", ""),
                     duration_minutes=msg.get("duration_minutes", 0),
                     coverage_percent=msg.get("coverage_percent", 0),
                     findings_json=json.dumps(all_findings, indent=2),
-                    work_order_json=msg.get("work_order_json", "[]"),
                     date_compact=now.strftime("%Y%m%d"), timestamp=now.isoformat() + "Z",
                 )
                 report = await asyncio.wait_for(
@@ -300,13 +305,21 @@ def web():
             except Exception as e:
                 print(f"[REPORT] Error: {e}")
                 report = f"Report error: {str(e)[:60]}"
+            if isinstance(report, str):
+                start = report.find("{")
+                end = report.rfind("}") + 1
+                if start != -1 and end > start:
+                    try:
+                        report = json.loads(report[start:end])
+                    except json.JSONDecodeError:
+                        pass
             print(f"[REPORT] Done ({len(str(report))} chars)")
             await ws.send_json({"type": "report", "data": report})
 
         async def run_voice_answer(question, frame_b64):
             print(f"[VOICE Q] {question[:60]}")
             try:
-                context = "You are inspecting a CAT 325 excavator." if inspection_mode == "cat" else "You are a visual copilot for general scene and safety monitoring."
+                context = "You are inspecting a CAT 797F mining haul truck." if inspection_mode == "cat" else "You are a visual copilot for general scene and safety monitoring."
                 prompt = (
                     f"{context} The technician asks: \"{question}\""
                     "\nAnswer in one concise sentence based on the image."
@@ -690,12 +703,12 @@ def web():
                 now = datetime.utcnow()
                 all_findings = [f for fs in session["zone_findings"].values() for f in (fs if isinstance(fs, list) else [fs])]
                 prompt = REPORT_PROMPT.format(
-                    model=msg.get("model", "CAT 325"), serial=msg.get("serial", ""),
+                    model=msg.get("model", session.get("model") or "Unknown"),
+                    serial=msg.get("serial", session.get("unit_serial") or ""),
                     hours=msg.get("hours", 0), technician=msg.get("technician", ""),
                     duration_minutes=msg.get("duration_minutes", 0),
                     coverage_percent=msg.get("coverage_percent", 0),
                     findings_json=json.dumps(all_findings, indent=2),
-                    work_order_json=msg.get("work_order_json", "[]"),
                     date_compact=now.strftime("%Y%m%d"), timestamp=now.isoformat() + "Z",
                 )
                 report = await asyncio.wait_for(
@@ -705,6 +718,14 @@ def web():
                 report = "Report generation timed out."
             except Exception as e:
                 report = f"Report error: {str(e)[:60]}"
+            if isinstance(report, str):
+                start = report.find("{")
+                end = report.rfind("}") + 1
+                if start != -1 and end > start:
+                    try:
+                        report = json.loads(report[start:end])
+                    except json.JSONDecodeError:
+                        pass
             await send_all({"type": "report", "data": report})
             from .db import save_report
             try:
@@ -714,7 +735,7 @@ def web():
 
         async def run_voice_session(question, frame_b64):
             try:
-                context = "You are inspecting a CAT 325 excavator." if session["mode"] == "cat" else "You are a visual copilot."
+                context = "You are inspecting a CAT 797F mining haul truck." if session["mode"] == "cat" else "You are a visual copilot."
                 prompt = (
                     f'{context} The technician asks: "{question}"\n'
                     "Answer based on what you see in the image. "
@@ -1159,7 +1180,7 @@ def web():
         try:
             audio_bytes = base64.b64decode(audio_b64)
             frame_b64 = session.get("latest_frame_b64") or ""
-            context = "You are inspecting a CAT 325 excavator." if session["mode"] == "cat" else "You are a visual copilot."
+            context = "You are inspecting a CAT 797F mining haul truck." if session["mode"] == "cat" else "You are a visual copilot."
             result = await asyncio.wait_for(
                 asyncio.to_thread(qwen_ref.voice_answer.remote, audio_bytes, frame_b64, context),
                 timeout=30,
@@ -1204,7 +1225,7 @@ def web():
             })
             return
         try:
-            context = "You are inspecting a CAT 325 excavator." if session["mode"] == "cat" else "You are a visual copilot."
+            context = "You are inspecting a CAT 797F mining haul truck." if session["mode"] == "cat" else "You are a visual copilot."
             prompt = (
                 f'{context} The operator asks: "{question}"\n'
                 "Answer based on what you see in the image. "
@@ -1270,12 +1291,12 @@ def web():
             now = datetime.utcnow()
             all_findings = [f for fs in session["zone_findings"].values() for f in (fs if isinstance(fs, list) else [fs])]
             prompt = REPORT_PROMPT.format(
-                model=msg.get("model", "CAT 325"), serial=msg.get("serial", ""),
+                model=msg.get("model", session.get("model") or "Unknown"),
+                serial=msg.get("serial", session.get("unit_serial") or ""),
                 hours=msg.get("hours", 0), technician=msg.get("technician", ""),
                 duration_minutes=msg.get("duration_minutes", 0),
                 coverage_percent=msg.get("coverage_percent", 0),
                 findings_json=json.dumps(all_findings, indent=2),
-                work_order_json=msg.get("work_order_json", "[]"),
                 date_compact=now.strftime("%Y%m%d"), timestamp=now.isoformat() + "Z",
             )
             report = await asyncio.wait_for(
@@ -1285,6 +1306,14 @@ def web():
             report = "Report generation timed out."
         except Exception as e:
             report = f"Report error: {str(e)[:60]}"
+        if isinstance(report, str):
+            start = report.find("{")
+            end = report.rfind("}") + 1
+            if start != -1 and end > start:
+                try:
+                    report = json.loads(report[start:end])
+                except json.JSONDecodeError:
+                    pass
         await _send_to_all(session, {"type": "report", "data": report})
         from .db import save_report
         try:

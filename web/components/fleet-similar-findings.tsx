@@ -59,21 +59,25 @@ export function FleetSimilarFindings({ unitSerial, findings }: Props) {
         <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>
           Similar Findings Across Fleet
         </h2>
-        <span
+        <a
+          href="https://supermemory.ai"
+          target="_blank"
+          rel="noopener noreferrer"
           style={{
             fontSize: 9,
             fontWeight: 600,
             letterSpacing: "0.06em",
             textTransform: "uppercase",
             color: "var(--amber)",
-            opacity: 0.7,
             padding: "2px 6px",
             borderRadius: "var(--radius-sm)",
-            border: "1px solid rgba(196, 162, 76, 0.2)",
+            border: "1px solid rgba(196, 162, 76, 0.3)",
+            textDecoration: "none",
+            transition: "opacity 0.2s",
           }}
         >
           supermemory
-        </span>
+        </a>
       </div>
       {loading && (
         <div className="card" style={{ padding: 24, textAlign: "center", fontSize: 14, color: "var(--text-dim)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>

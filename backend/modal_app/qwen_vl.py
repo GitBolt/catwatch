@@ -128,21 +128,20 @@ class Qwen25VLInspector:
     def identify_equipment(self, image_b64):
         """Identify equipment type, model, and inspectable zones from a single frame."""
         prompt = (
-            "You are a Caterpillar equipment identification specialist.\n"
+            "You are a Caterpillar equipment identification specialist focused on the CAT 797F mining haul truck.\n"
             "Look at this image carefully. Identify the equipment and read any visible text.\n\n"
             "Return ONLY valid JSON:\n"
             "{\n"
-            '  "equipment_type": "excavator" | "wheel_loader" | "dozer" | "motor_grader" | '
-            '"articulated_truck" | "telehandler" | "backhoe_loader" | "skid_steer" | "compact_track_loader" | "other",\n'
-            '  "model_guess": "e.g. CAT 325, CAT 982M, CAT D8T — best guess from visual cues",\n'
+            '  "equipment_type": "mining_truck" | "excavator" | "wheel_loader" | "dozer" | "motor_grader" | '
+            '"articulated_truck" | "other",\n'
+            '  "model_guess": "e.g. CAT 797F, CAT 793F — best guess from visual cues",\n'
             '  "visible_text": "any serial number, model plate, or hour meter text you can read" or null,\n'
             '  "inspectable_zones": ["list of major component areas that should be inspected on this equipment type"]\n'
             "}\n\n"
             "For inspectable_zones, list the actual component groups relevant to THIS equipment type. "
-            "Examples:\n"
-            "- Excavator: undercarriage, tracks, boom, stick, bucket, hydraulic_cylinders, hydraulic_hoses, cab, engine, cooling_system, swing_bearing, counterweight, attachments\n"
-            "- Wheel loader: tires, rims, loader_arms, bucket, hydraulic_cylinders, hydraulic_hoses, cab, engine, cooling_system, drivetrain, axles, counterweight\n"
-            "- Dozer: tracks, undercarriage, blade, push_arms, hydraulic_cylinders, cab, engine, cooling_system, ripper, final_drives\n"
+            "The primary target is the CAT 797F mining haul truck:\n"
+            "- Mining truck (797F): tires_rims, dump_body, hoist_cylinders, suspension, engine, cooling, "
+            "drivetrain, brakes, cab, steps_handrails, frame, hydraulics, exhaust\n"
             "Use snake_case. Be specific to what you see."
         )
         messages = [

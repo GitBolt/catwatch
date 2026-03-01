@@ -1,8 +1,5 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { ZONE_LABELS, type ZoneId } from "./constants";
-
-/* ─── Types ──────────────────────────────────────────────────── */
 
 export interface InspectionPDFData {
   sessionId: string;
@@ -23,8 +20,6 @@ export interface InspectionPDFData {
   } | null;
 }
 
-/* ─── Color Palette (matching CAT branding) ──────────────────── */
-
 const AMBER = [245, 197, 24] as const;
 const BLACK = [0, 0, 0] as const;
 const WHITE = [255, 255, 255] as const;
@@ -39,451 +34,312 @@ const GREEN_TEXT = [34, 120, 34] as const;
 const YELLOW_TEXT = [150, 120, 0] as const;
 const RED_TEXT = [180, 40, 40] as const;
 
-/* ─── Helpers ────────────────────────────────────────────────── */
-
 function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", {
-    month: "numeric",
-    day: "numeric",
-    year: "numeric",
-  });
+  return new Date(dateStr).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" });
 }
 
 function formatTime(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return new Date(dateStr).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
-function getRatingColor(rating: string): {
-  bg: readonly [number, number, number];
-  text: readonly [number, number, number];
-} {
+type RGB = [number, number, number];
+
+function getRatingColor(rating: string): { bg: RGB; text: RGB } {
   switch (rating.toUpperCase()) {
-    case "GREEN":
-      return { bg: GREEN_BG, text: GREEN_TEXT };
-    case "YELLOW":
-      return { bg: YELLOW_BG, text: YELLOW_TEXT };
-    case "RED":
-      return { bg: RED_BG, text: RED_TEXT };
-    default:
-      return { bg: LIGHT_GRAY, text: DARK_GRAY };
+    case "GREEN": return { bg: [...GREEN_BG] as RGB, text: [...GREEN_TEXT] as RGB };
+    case "YELLOW": return { bg: [...YELLOW_BG] as RGB, text: [...YELLOW_TEXT] as RGB };
+    case "RED": return { bg: [...RED_BG] as RGB, text: [...RED_TEXT] as RGB };
+    default: return { bg: [...LIGHT_GRAY] as RGB, text: [...DARK_GRAY] as RGB };
   }
-}
-
-function getExpirationDate(createdDateStr: string): string {
-  const d = new Date(createdDateStr);
-  d.setMonth(d.getMonth() + 2);
-  return formatDate(d.toISOString());
 }
 
 function getDuration(start: string, end: string | null): string {
   if (!end) return "In progress";
-  const ms = new Date(end).getTime() - new Date(start).getTime();
-  const mins = Math.round(ms / 60000);
+  const mins = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000);
   if (mins < 60) return `${mins} min`;
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
-/* ─── Main PDF Generator ─────────────────────────────────────── */
+function humanizeZone(zone: string): string {
+  return zone
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
-export function generateInspectionPDF(data: InspectionPDFData): jsPDF {
+const RATING_ORDER: Record<string, number> = { RED: 3, YELLOW: 2, GREEN: 1 };
+
+async function loadLogoBase64(): Promise<string | null> {
+  try {
+    const res = await fetch("/logo.png");
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function generateInspectionPDF(data: InspectionPDFData): Promise<jsPDF> {
+  const logoB64 = await loadLogoBase64();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 14;
   const contentWidth = pageWidth - margin * 2;
   let y = 12;
 
-  // ── Header Band ────────────────────────────────────────────
+  // ── Header Band ─────────────────────────────────────────
   doc.setFillColor(...AMBER);
   doc.rect(0, 0, pageWidth, 28, "F");
 
-  // Logo text "CATWATCH" in header
+  if (logoB64) {
+    try { doc.addImage(logoB64, "PNG", margin, 3, 22, 22); } catch { /* skip */ }
+  }
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
   doc.setTextColor(...BLACK);
-  doc.text("CATWATCH", margin, 18);
+  doc.text("CATWATCH", margin + 25, 18);
 
-  // Title
   doc.setFontSize(14);
-  doc.setTextColor(...BLACK);
-  doc.text("Equipment Inspection Report", pageWidth - margin, 12, {
-    align: "right",
-  });
-
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.text("Drone-Based Automated Inspection", pageWidth - margin, 18, {
-    align: "right",
-  });
+  doc.text("Equipment Inspection Report", pageWidth - margin, 14, { align: "right" });
 
   doc.setFontSize(8);
   doc.setTextColor(...DARK_GRAY);
-  doc.text(`Report ID: ${data.sessionId.slice(0, 12)}`, pageWidth - margin, 24, {
-    align: "right",
-  });
+  doc.text(`Report ID: ${data.sessionId.slice(0, 12)}`, pageWidth - margin, 22, { align: "right" });
 
   y = 34;
 
-  // ── Appraisal Family Header ────────────────────────────────
+  // ── Session Info ────────────────────────────────────────
   doc.setFillColor(...BLACK);
   doc.rect(margin, y, contentWidth, 7, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...WHITE);
-  doc.text(
-    `  INSPECTION SESSION: ${data.mode.toUpperCase()} MODE`,
-    margin + 2,
-    y + 5
-  );
+  doc.text(`  INSPECTION SESSION: ${data.mode.toUpperCase()} MODE`, margin + 2, y + 5);
   y += 10;
 
-  // ── Session Info Table ─────────────────────────────────────
-  const sessionInfoRows = [
-    ["Session ID", data.sessionId],
-    ["Inspection Date", formatDate(data.createdAt)],
-    [
-      "Inspection Time",
-      formatTime(data.createdAt),
-    ],
-    ["Status", data.status.charAt(0).toUpperCase() + data.status.slice(1)],
-    ["Duration", getDuration(data.createdAt, data.endedAt)],
-    [
-      "Expiration Date",
-      getExpirationDate(data.createdAt),
-    ],
-  ];
+  const redCount = data.findings.filter((f) => f.rating === "RED").length;
+  const yellowCount = data.findings.filter((f) => f.rating === "YELLOW").length;
+  const greenCount = data.findings.filter((f) => f.rating === "GREEN").length;
 
   autoTable(doc, {
     startY: y,
     head: [],
-    body: sessionInfoRows,
+    body: [
+      ["Session ID", data.sessionId],
+      ["Date", formatDate(data.createdAt)],
+      ["Time", formatTime(data.createdAt)],
+      ["Status", data.status.charAt(0).toUpperCase() + data.status.slice(1)],
+      ["Duration", getDuration(data.createdAt, data.endedAt)],
+      ["Coverage", `${Math.round(data.coveragePct)}%`],
+      ["Total Findings", `${data.findings.length} (${redCount} RED, ${yellowCount} YELLOW, ${greenCount} GREEN)`],
+    ],
     theme: "grid",
     margin: { left: margin, right: margin },
-    styles: {
-      fontSize: 8,
-      cellPadding: 2,
-      lineColor: [...TABLE_BORDER],
-      lineWidth: 0.3,
-    },
+    styles: { fontSize: 8, cellPadding: 2, lineColor: [...TABLE_BORDER], lineWidth: 0.3 },
     columnStyles: {
-      0: {
-        fontStyle: "bold",
-        cellWidth: 40,
-        fillColor: [...LIGHT_GRAY],
-        textColor: [...DARK_GRAY],
-      },
+      0: { fontStyle: "bold", cellWidth: 40, fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY] },
       1: { textColor: [...BLACK] },
     },
   });
 
   y = (doc as any).lastAutoTable.finalY + 6;
 
-  // ── Coverage Configuration ─────────────────────────────────
+  // ── Zone Summary (data-driven) ──────────────────────────
   doc.setFillColor(...BLACK);
   doc.rect(margin, y, contentWidth, 7, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...WHITE);
-  doc.text("  COVERAGE CONFIGURATION", margin + 2, y + 5);
+  doc.text("  ZONE SUMMARY", margin + 2, y + 5);
   y += 10;
 
-  const coverageRows = [
-    ["Mode", data.mode.toUpperCase()],
-    ["Coverage", `${Math.round(data.coveragePct)}%`],
-    ["Zones Inspected", `${data.zonesSeen} / 15`],
-    [
-      "Findings Count",
-      `${data.findings.length}`,
-    ],
-    [
-      "Red Flags",
-      `${data.findings.filter((f) => f.rating === "RED").length}`,
-    ],
-    [
-      "Yellow Flags",
-      `${data.findings.filter((f) => f.rating === "YELLOW").length}`,
-    ],
-    [
-      "Green Items",
-      `${data.findings.filter((f) => f.rating === "GREEN").length}`,
-    ],
-  ];
-
-  autoTable(doc, {
-    startY: y,
-    head: [],
-    body: coverageRows,
-    theme: "grid",
-    margin: { left: margin, right: margin },
-    styles: {
-      fontSize: 8,
-      cellPadding: 2,
-      lineColor: [...TABLE_BORDER],
-      lineWidth: 0.3,
-    },
-    columnStyles: {
-      0: {
-        fontStyle: "bold",
-        cellWidth: 40,
-        fillColor: [...LIGHT_GRAY],
-        textColor: [...DARK_GRAY],
-      },
-      1: { textColor: [...BLACK] },
-    },
-  });
-
-  y = (doc as any).lastAutoTable.finalY + 6;
-
-  // ── General Appearance (Findings Table) ───────────────────
-  doc.setFillColor(...BLACK);
-  doc.rect(margin, y, contentWidth, 7, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...WHITE);
-  doc.text("  GENERAL APPEARANCE", margin + 2, y + 5);
-  y += 10;
-
-  // Build zone-based findings summary
-  const ALL_ZONE_KEYS = Object.keys(ZONE_LABELS) as ZoneId[];
-  const zoneFindingsMap = new Map<
-    string,
-    { rating: string; description: string }[]
-  >();
-
+  // Group findings by zone, compute worst rating per zone
+  const zoneSummary = new Map<string, { worst: string; count: number; descriptions: string[] }>();
   data.findings.forEach((f) => {
-    const existing = zoneFindingsMap.get(f.zone) || [];
-    existing.push({ rating: f.rating, description: f.description });
-    zoneFindingsMap.set(f.zone, existing);
-  });
-
-  const appearanceRows: any[][] = [];
-
-  ALL_ZONE_KEYS.forEach((zoneKey) => {
-    const label = ZONE_LABELS[zoneKey];
-    const findings = zoneFindingsMap.get(zoneKey);
-
-    if (findings && findings.length > 0) {
-      const worstRating = findings.reduce((worst, f) => {
-        const order: Record<string, number> = {
-          RED: 3,
-          YELLOW: 2,
-          GREEN: 1,
-        };
-        return (order[f.rating] || 0) > (order[worst] || 0)
-          ? f.rating
-          : worst;
-      }, findings[0].rating);
-
-      const colors = getRatingColor(worstRating);
-      const descriptions = findings
-        .map((f) => f.description)
-        .join("; ")
-        .toUpperCase();
-
-      appearanceRows.push([
-        { content: label, styles: { fontStyle: "bold" as const } },
-        {
-          content: worstRating,
-          styles: {
-            fillColor: [...colors.bg],
-            textColor: [...colors.text],
-            fontStyle: "bold" as const,
-          },
-        },
-        { content: descriptions, styles: {} },
-      ]);
+    const key = f.zone || "general";
+    const existing = zoneSummary.get(key);
+    if (existing) {
+      existing.count++;
+      if ((RATING_ORDER[f.rating] || 0) > (RATING_ORDER[existing.worst] || 0)) {
+        existing.worst = f.rating;
+      }
+      if (f.rating !== "GREEN" && existing.descriptions.length < 3) {
+        existing.descriptions.push(f.description);
+      }
     } else {
-      appearanceRows.push([
-        { content: label, styles: { fontStyle: "bold" as const } },
-        {
-          content: "Good",
-          styles: {
-            fillColor: [...GREEN_BG],
-            textColor: [...GREEN_TEXT],
-            fontStyle: "bold",
-          },
-        },
-        { content: "", styles: {} },
-      ]);
+      zoneSummary.set(key, {
+        worst: f.rating,
+        count: 1,
+        descriptions: f.rating !== "GREEN" ? [f.description] : [],
+      });
     }
   });
 
+  // Sort: RED first, then YELLOW, then GREEN
+  const sortedZones = [...zoneSummary.entries()].sort(
+    (a, b) => (RATING_ORDER[b[1].worst] || 0) - (RATING_ORDER[a[1].worst] || 0)
+  );
+
+  const zoneRows: any[][] = sortedZones.map(([zone, info]) => {
+    const colors = getRatingColor(info.worst);
+    const remarks = info.descriptions.length > 0
+      ? info.descriptions.join("; ")
+      : info.worst === "GREEN" ? "No issues detected" : "";
+    return [
+      { content: humanizeZone(zone), styles: { fontStyle: "bold" as const } },
+      {
+        content: info.worst,
+        styles: { fillColor: [...colors.bg], textColor: [...colors.text], fontStyle: "bold" as const },
+      },
+      { content: `${info.count}`, styles: { halign: "center" as const } },
+      { content: remarks, styles: {} },
+    ];
+  });
+
+  if (zoneRows.length === 0) {
+    zoneRows.push([
+      { content: "No zones inspected", styles: { fontStyle: "italic" as const } },
+      { content: "—", styles: {} },
+      { content: "0", styles: { halign: "center" as const } },
+      { content: "Insufficient data for assessment", styles: {} },
+    ]);
+  }
+
   autoTable(doc, {
     startY: y,
-    head: [
-      [
-        {
-          content: "Zone",
-          styles: {
-            fillColor: [...LIGHT_GRAY],
-            textColor: [...DARK_GRAY],
-            fontStyle: "bold",
-          },
-        },
-        {
-          content: "CODE",
-          styles: {
-            fillColor: [...LIGHT_GRAY],
-            textColor: [...DARK_GRAY],
-            fontStyle: "bold",
-          },
-        },
-        {
-          content: "REMARKS",
-          styles: {
-            fillColor: [...LIGHT_GRAY],
-            textColor: [...DARK_GRAY],
-            fontStyle: "bold",
-          },
-        },
-      ],
-    ],
-    body: appearanceRows,
+    head: [[
+      { content: "Zone", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+      { content: "Rating", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+      { content: "Findings", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+      { content: "Remarks", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+    ]],
+    body: zoneRows,
     theme: "grid",
     margin: { left: margin, right: margin },
-    styles: {
-      fontSize: 8,
-      cellPadding: 2.5,
-      lineColor: [...TABLE_BORDER],
-      lineWidth: 0.3,
-      textColor: [...BLACK],
-    },
-    columnStyles: {
-      0: { cellWidth: 40 },
-      1: { cellWidth: 20, halign: "center" },
-      2: {},
-    },
+    styles: { fontSize: 8, cellPadding: 2.5, lineColor: [...TABLE_BORDER], lineWidth: 0.3, textColor: [...BLACK] },
+    columnStyles: { 0: { cellWidth: 38 }, 1: { cellWidth: 18, halign: "center" }, 2: { cellWidth: 18, halign: "center" }, 3: {} },
   });
 
   y = (doc as any).lastAutoTable.finalY + 6;
 
-  // ── Detailed Findings Log ──────────────────────────────────
-  if (data.findings.length > 0) {
-    // Check if we need a new page
-    if (y > 240) {
-      doc.addPage();
-      y = 14;
-    }
+  // ── RED & YELLOW Findings Detail ────────────────────────
+  const criticalFindings = data.findings.filter((f) => f.rating === "RED" || f.rating === "YELLOW");
+
+  if (criticalFindings.length > 0) {
+    if (y > 230) { doc.addPage(); y = 14; }
 
     doc.setFillColor(...BLACK);
     doc.rect(margin, y, contentWidth, 7, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(...WHITE);
-    doc.text("  DETAILED FINDINGS LOG", margin + 2, y + 5);
+    doc.text("  ACTION ITEMS — RED & YELLOW FINDINGS", margin + 2, y + 5);
     y += 10;
 
-    const detailedRows: any[][] = data.findings.map((f) => {
-      const zoneLabel =
-        ZONE_LABELS[f.zone as ZoneId] || f.zone;
+    const criticalRows = criticalFindings
+      .sort((a, b) => (RATING_ORDER[b.rating] || 0) - (RATING_ORDER[a.rating] || 0))
+      .map((f) => {
+        const colors = getRatingColor(f.rating);
+        return [
+          formatTime(f.createdAt),
+          { content: humanizeZone(f.zone || "general"), styles: { fontStyle: "bold" as const } },
+          { content: f.rating, styles: { fillColor: colors.bg, textColor: colors.text, fontStyle: "bold" as const, halign: "center" as const } },
+          f.description,
+        ];
+      });
+
+    autoTable(doc, {
+      startY: y,
+      head: [[
+        { content: "Time", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+        { content: "Zone", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+        { content: "Rating", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+        { content: "Description", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+      ]],
+      body: criticalRows,
+      theme: "grid",
+      margin: { left: margin, right: margin },
+      styles: { fontSize: 7.5, cellPadding: 2, lineColor: [...TABLE_BORDER], lineWidth: 0.3, textColor: [...BLACK] },
+      columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 32 }, 2: { cellWidth: 18, halign: "center" }, 3: {} },
+    });
+
+    y = (doc as any).lastAutoTable.finalY + 6;
+  }
+
+  // ── Full Findings Log ───────────────────────────────────
+  if (data.findings.length > 0) {
+    if (y > 230) { doc.addPage(); y = 14; }
+
+    doc.setFillColor(...BLACK);
+    doc.rect(margin, y, contentWidth, 7, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...WHITE);
+    doc.text("  COMPLETE FINDINGS LOG", margin + 2, y + 5);
+    y += 10;
+
+    const allRows = data.findings.map((f) => {
       const colors = getRatingColor(f.rating);
       return [
         formatTime(f.createdAt),
-        { content: zoneLabel, styles: { fontStyle: "bold" as const } },
-        {
-          content: f.rating,
-          styles: {
-            fillColor: [...colors.bg] as [number, number, number],
-            textColor: [...colors.text] as [number, number, number],
-            fontStyle: "bold" as const,
-            halign: "center" as const,
-          },
-        },
+        { content: humanizeZone(f.zone || "general"), styles: { fontStyle: "bold" as const } },
+        { content: f.rating, styles: { fillColor: colors.bg, textColor: colors.text, fontStyle: "bold" as const, halign: "center" as const } },
         f.description,
       ];
     });
 
     autoTable(doc, {
       startY: y,
-      head: [
-        [
-          {
-            content: "Time",
-            styles: {
-              fillColor: [...LIGHT_GRAY],
-              textColor: [...DARK_GRAY],
-              fontStyle: "bold",
-            },
-          },
-          {
-            content: "Zone",
-            styles: {
-              fillColor: [...LIGHT_GRAY],
-              textColor: [...DARK_GRAY],
-              fontStyle: "bold",
-            },
-          },
-          {
-            content: "Rating",
-            styles: {
-              fillColor: [...LIGHT_GRAY],
-              textColor: [...DARK_GRAY],
-              fontStyle: "bold",
-            },
-          },
-          {
-            content: "Description",
-            styles: {
-              fillColor: [...LIGHT_GRAY],
-              textColor: [...DARK_GRAY],
-              fontStyle: "bold",
-            },
-          },
-        ],
-      ],
-      body: detailedRows,
+      head: [[
+        { content: "Time", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+        { content: "Zone", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+        { content: "Rating", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+        { content: "Description", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+      ]],
+      body: allRows,
       theme: "grid",
       margin: { left: margin, right: margin },
-      styles: {
-        fontSize: 7.5,
-        cellPadding: 2,
-        lineColor: [...TABLE_BORDER],
-        lineWidth: 0.3,
-        textColor: [...BLACK],
-      },
-      columnStyles: {
-        0: { cellWidth: 22 },
-        1: { cellWidth: 32 },
-        2: { cellWidth: 18, halign: "center" },
-        3: {},
-      },
+      styles: { fontSize: 7.5, cellPadding: 2, lineColor: [...TABLE_BORDER], lineWidth: 0.3, textColor: [...BLACK] },
+      columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 32 }, 2: { cellWidth: 18, halign: "center" }, 3: {} },
     });
 
     y = (doc as any).lastAutoTable.finalY + 6;
   }
 
-  // ── Report Summary (if available) ─────────────────────────
+  // ── AI Executive Summary ────────────────────────────────
   if (data.report) {
-    if (y > 220) {
-      doc.addPage();
-      y = 14;
-    }
+    if (y > 220) { doc.addPage(); y = 14; }
 
     doc.setFillColor(...BLACK);
     doc.rect(margin, y, contentWidth, 7, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(...WHITE);
-    doc.text("  AI ANALYSIS REPORT", margin + 2, y + 5);
+    doc.text("  AI EXECUTIVE SUMMARY", margin + 2, y + 5);
     y += 10;
 
-    const reportText =
-      typeof data.report.data === "string"
-        ? data.report.data
-        : JSON.stringify(data.report.data, null, 2);
+    let summaryText = "";
+    if (typeof data.report.data === "string") {
+      summaryText = data.report.data;
+    } else if (data.report.data && typeof data.report.data === "object") {
+      const rd = data.report.data as Record<string, unknown>;
+      if (rd.ai_executive_summary) {
+        summaryText = String(rd.ai_executive_summary);
+      } else {
+        summaryText = JSON.stringify(data.report.data, null, 2);
+      }
+    }
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...DARK_GRAY);
 
-    const lines = doc.splitTextToSize(reportText, contentWidth - 8);
+    const lines = doc.splitTextToSize(summaryText, contentWidth - 8);
     const lineHeight = 3.5;
-
-    // Draw a bordered background
     const boxHeight = Math.min(lines.length * lineHeight + 8, 200);
     doc.setDrawColor(...TABLE_BORDER);
     doc.setLineWidth(0.3);
@@ -498,47 +354,25 @@ export function generateInspectionPDF(data: InspectionPDFData): jsPDF {
       doc.text(line, margin + 4, textY);
       textY += lineHeight;
     }
-
     y = textY + 6;
   }
 
-  // ── Footer on each page ────────────────────────────────────
+  // ── Footer ──────────────────────────────────────────────
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     const pageHeight = doc.internal.pageSize.getHeight();
 
-    // Footer line
     doc.setDrawColor(...AMBER);
     doc.setLineWidth(0.8);
     doc.line(margin, pageHeight - 16, pageWidth - margin, pageHeight - 16);
 
-    // Footer text
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.setTextColor(...MID_GRAY);
-    doc.text(
-      "CATWATCH — Drone-Based Equipment Inspection Platform",
-      margin,
-      pageHeight - 12
-    );
-    doc.text(
-      `Generated: ${new Date().toLocaleString()}`,
-      margin,
-      pageHeight - 8
-    );
-    doc.text(
-      `Page ${i} of ${pageCount}`,
-      pageWidth - margin,
-      pageHeight - 12,
-      { align: "right" }
-    );
-    doc.text(
-      "Built by Syed Aabis Akhtar & Even Chen — HackIllinois 2026",
-      pageWidth - margin,
-      pageHeight - 8,
-      { align: "right" }
-    );
+    doc.text("CATWATCH — AI-Powered Equipment Inspection", margin, pageHeight - 12);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, pageHeight - 8);
+    doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 12, { align: "right" });
   }
 
   return doc;

@@ -28,7 +28,7 @@ class CatWatch:
     Example::
 
         cw = CatWatch("cw_live_...")
-        cw.connect(source=0, mode="cat", unit_serial="CAT325-001")
+        cw.connect(source=0, mode="cat", unit_serial="797F-001")
 
         @cw.on_analysis
         def on_analysis(msg):
@@ -116,7 +116,7 @@ class CatWatch:
                     or a Picamera2 object.
             mode: Inspection mode — 'general' or 'cat'.
             unit_serial: Equipment serial number for fleet tracking.
-            model: Equipment model (e.g. 'CAT 325').
+            model: Equipment model (e.g. 'CAT 797F').
             fleet_tag: Fleet group identifier.
             location: Site/location identifier for general mode memory
                       (e.g. 'warehouse-7B', 'site-14', or 'geo:37.77,-122.42').
@@ -280,7 +280,7 @@ class CatWatch:
         """
         self.send({"type": "sensor", "data": data})
 
-    def generate_report(self, model="CAT 325", serial="", technician="",
+    def generate_report(self, model="CAT 797F", serial="", technician="",
                         hours=0, duration_minutes=0):
         """Trigger report generation on the backend.
 

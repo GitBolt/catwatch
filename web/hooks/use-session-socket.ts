@@ -144,6 +144,8 @@ export function useSessionSocket(sessionId: string | null): SessionState {
   }, []);
 
   const sendAudio = useCallback((audioBase64: string) => {
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
+    setVoiceAnswer(null);
     send({ type: "audio_question", audio: audioBase64 });
   }, [send]);
 
@@ -179,10 +181,23 @@ export function useSessionSocket(sessionId: string | null): SessionState {
     geoAttemptedRef.current = true;
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         const lat = pos.coords.latitude.toFixed(3);
         const lng = pos.coords.longitude.toFixed(3);
-        setGeoKey(`geo:${lat},${lng}`);
+        const fallback = `geo:${lat},${lng}`;
+        setGeoKey(fallback);
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=16`,
+            { headers: { "Accept-Language": "en" } },
+          );
+          if (res.ok) {
+            const data = await res.json();
+            const addr = data.address || {};
+            const name = addr.building || addr.amenity || addr.road || addr.neighbourhood || addr.suburb || addr.city || fallback;
+            setGeoKey(String(name));
+          }
+        } catch { /* keep coordinate fallback */ }
       },
       () => {},
       { timeout: 5000, maximumAge: 300000 },
@@ -270,8 +285,12 @@ export function useSessionSocket(sessionId: string | null): SessionState {
           case "voice_answer":
             setVoiceAnswer(msg.text);
             if ("speechSynthesis" in window) {
+              speechSynthesis.cancel();
               const utterance = new SpeechSynthesisUtterance(msg.text);
+              utterance.onend = () => setVoiceAnswer(null);
               speechSynthesis.speak(utterance);
+            } else {
+              setTimeout(() => setVoiceAnswer(null), 10000);
             }
             break;
 
