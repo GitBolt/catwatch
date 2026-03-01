@@ -1,10 +1,10 @@
 "use client";
 
 import type { FindingData } from "@/lib/types";
-import { SEVERITY_COLORS, ZONE_LABELS, type ZoneId } from "@/lib/constants";
+import { SEVERITY_COLORS } from "@/lib/constants";
 
 function formatZone(zone: string): string {
-  return ZONE_LABELS[zone as ZoneId] || zone.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return zone?.replace(/_/g, " ") || "General";
 }
 
 interface Props {

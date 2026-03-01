@@ -1,92 +1,80 @@
 {
-  "hydraulics": {
-    "spec_text": "Inspect hoses for abrasion, swelling, leaks at fittings. Active drips = RED. Minor seeping = YELLOW. Service interval: 4000h or 5 years.",
-    "failure_modes": ["hose abrasion at boom pivot", "fitting leak", "cylinder rod pitting"],
-    "procedure": "SIS SEHS9743",
-    "sub_section_prompt": "hydraulic_system_prompt"
-  },
-  "undercarriage": {
-    "spec_text": "Track tension sag: 30-40mm at measurement point. Master link cotter pins must be present. Sprocket teeth: replace at 50% wear.",
-    "failure_modes": ["overtension", "undertension", "master link wear", "roller flat spots"],
-    "procedure": "SIS 5J0900",
-    "sub_section_prompt": "undercarriage_tracks_prompt"
-  },
-  "cooling": {
-    "spec_text": "Coolant between MIN/MAX with engine cold. Milky = coolant/oil mix = RED. Continuous unexplained daily loss = RED.",
-    "failure_modes": ["low level", "milky contamination", "external leak", "radiator fin damage", "hose clamp failure"],
-    "procedure": "SIS SEBU6251",
-    "sub_section_prompt": "engine_coolant_prompt"
-  },
-  "steps_handrails": {
-    "spec_text": "Bent/broken steps = RED (fall hazard). Cracked glass = RED (visibility). Missing grip surface = YELLOW.",
-    "failure_modes": ["cracked windshield", "bent step", "broken handrail", "damaged hinge"],
-    "procedure": "OSHA 1926.502 / CAT operator safety manual",
-    "sub_section_prompt": "steps_handrails_prompt"
-  },
   "tires_rims": {
-    "spec_text": "Flat/damaged tires = RED. Cracked rim = RED. Missing lug nuts = RED. Cords visible = RED. Note: N/A for tracked excavators.",
-    "failure_modes": ["flat tire", "sidewall damage", "cracked rim", "missing lug nuts", "severe rim corrosion"],
-    "procedure": "CAT wheel equipment safety manual",
+    "spec_text": "CAT 797F uses 6x 63\" OTR tires (59/80R63). Inspect for cuts, bulges, tread depth, bead damage. Cracked rim = RED. Missing lug nuts = RED. Cords visible = RED. Tread depth below 40% = YELLOW.",
+    "failure_modes": ["sidewall cut", "bulge/separation", "tread wear", "rim crack", "missing lug nuts", "bead damage"],
+    "procedure": "SIS CAT 797F tire & rim inspection SEHS9031",
     "sub_section_prompt": "tires_rims_prompt"
   },
-  "structural": {
-    "spec_text": "Any structural crack = RED. Surface rust = YELLOW. Pitting affecting structural integrity = RED.",
-    "failure_modes": ["structural crack", "frame deformation", "weld failure", "rust on structural members"],
-    "procedure": "SIS structural inspection protocol",
-    "sub_section_prompt": "structural_integrity_prompt"
+  "dump_body": {
+    "spec_text": "Inspect dump body for structural cracks, liner wear, dents, hinge pin condition, tailgate latching. Body crack at pivot = RED. Liner worn through = YELLOW. Tailgate latch failure = RED.",
+    "failure_modes": ["body crack at pivot", "liner wear-through", "tailgate latch failure", "hinge pin wear", "body dent affecting structure"],
+    "procedure": "SIS dump body inspection SEHS9245",
+    "sub_section_prompt": "dump_body_prompt"
   },
-  "boom_arm": {
-    "spec_text": "Inspect boom and stick for visible cracks, cylinder rod condition, pin wear. Bent or cracked boom = RED. Minor pin wear = YELLOW.",
-    "failure_modes": ["boom crack", "cylinder rod pitting", "pin wear", "bushing play"],
-    "procedure": "SIS boom/stick inspection",
-    "sub_section_prompt": "boom_stick_prompt"
+  "hoist_cylinders": {
+    "spec_text": "Inspect 2x hoist cylinders for rod pitting, seal leaks, mounting pin wear. Active oil leak = RED. Rod pitting visible = YELLOW. Mounting pin play > spec = YELLOW.",
+    "failure_modes": ["rod pitting", "seal leak", "mounting pin wear", "cylinder rod scoring", "hydraulic line chafe"],
+    "procedure": "SIS hoist cylinder inspection SEHS9400",
+    "sub_section_prompt": "hoist_cylinders_prompt"
   },
-  "stick": {
-    "spec_text": "Inspect stick for cracks, deformation, cylinder leaks. Stick crack = RED. Cylinder weep = YELLOW.",
-    "failure_modes": ["stick crack", "cylinder leak", "pin seizure"],
-    "procedure": "SIS boom/stick inspection",
-    "sub_section_prompt": "boom_stick_prompt"
-  },
-  "bucket": {
-    "spec_text": "Cutting edge wear past 50% = YELLOW. Missing teeth = RED. Pin play exceeding spec = YELLOW.",
-    "failure_modes": ["cutting edge wear", "missing teeth", "pin play", "adapter crack"],
-    "procedure": "SIS bucket/attachment inspection",
-    "sub_section_prompt": "bucket_attachments_prompt"
-  },
-  "attachments": {
-    "spec_text": "Quick coupler pins fully engaged. Attachment mounting secure. Hydraulic lines to attachment leak-free.",
-    "failure_modes": ["coupler pin not engaged", "attachment mounting loose", "hydraulic line leak"],
-    "procedure": "SIS bucket/attachment inspection",
-    "sub_section_prompt": "bucket_attachments_prompt"
+  "suspension": {
+    "spec_text": "CAT 797F has 4 suspension struts (N2 over oil). Check ride height measurement, oil leaks at seals, nitrogen charge. Oil leak at strut = RED. Low ride height = YELLOW. Uneven ride height side-to-side = YELLOW.",
+    "failure_modes": ["strut oil leak", "low nitrogen charge", "uneven ride height", "strut mount wear", "rebound stop damage"],
+    "procedure": "SIS suspension strut inspection SEHS9150",
+    "sub_section_prompt": "suspension_prompt"
   },
   "engine": {
-    "spec_text": "Oil level between MIN/MAX on dipstick. Belt tension correct. No external oil leaks. Filter service per schedule.",
-    "failure_modes": ["low oil", "belt crack", "external oil leak", "filter bypass"],
-    "procedure": "SIS engine daily inspection",
+    "spec_text": "C175-20 diesel (4000 HP). Oil level between MIN/MAX. No external oil leaks. Belt condition acceptable. Turbocharger secure, no shaft play. Filter service per schedule.",
+    "failure_modes": ["low oil level", "external oil leak", "belt crack/fray", "turbo shaft play", "filter bypass indicator"],
+    "procedure": "SIS C175-20 engine daily inspection SEHS9600",
     "sub_section_prompt": "engine_system_prompt"
   },
+  "cooling": {
+    "spec_text": "V-shaped radiator assembly. Coolant between MIN/MAX with engine cold. Milky = coolant/oil mix = RED. Radiator fin damage > 20% blockage = YELLOW. Fan shroud secure.",
+    "failure_modes": ["low coolant", "milky contamination", "radiator fin damage", "coolant line leak", "fan shroud loose"],
+    "procedure": "SIS cooling system inspection SEBU6251",
+    "sub_section_prompt": "engine_coolant_prompt"
+  },
+  "drivetrain": {
+    "spec_text": "Mechanical drive: torque converter + transmission + final drives. Check oil levels, external leaks, final drive housing cracks. Transmission oil leak = RED. Final drive oil level low = YELLOW.",
+    "failure_modes": ["transmission oil leak", "torque converter stall issue", "final drive housing crack", "axle seal leak", "driveshaft vibration"],
+    "procedure": "SIS drivetrain inspection SEHS8800",
+    "sub_section_prompt": "drivetrain_prompt"
+  },
+  "brakes": {
+    "spec_text": "Wet disc brakes on all wheels. Inspect brake cooling lines, disc wear indicators, brake oil level. Brake cooling line leak = RED. Low brake oil = RED. Disc wear indicator triggered = YELLOW.",
+    "failure_modes": ["brake cooling line leak", "low brake oil", "disc wear limit reached", "caliper damage", "brake fade indication"],
+    "procedure": "SIS 797F brake system inspection SEHS9100",
+    "sub_section_prompt": "brakes_prompt"
+  },
   "cab": {
-    "spec_text": "All gauges functional. Seat belt operational. Horn audible. Mirrors intact and adjusted. Windshield clear.",
-    "failure_modes": ["gauge malfunction", "seat belt failure", "horn inoperative", "mirror damage"],
+    "spec_text": "All gauges functional. Seat belt operational. Horn audible. Mirrors intact and adjusted. Windshield clear. ROPS/FOPS structure intact.",
+    "failure_modes": ["gauge malfunction", "seat belt failure", "horn inoperative", "mirror damage", "windshield crack", "ROPS damage"],
     "procedure": "SIS cab/operator station inspection",
     "sub_section_prompt": "cab_glass_mirrors_prompt"
   },
-  "drivetrain": {
-    "spec_text": "Final drive oil level correct. No external leaks. Travel motor response normal both directions.",
-    "failure_modes": ["final drive leak", "travel motor sluggish", "drive sprocket wear"],
-    "procedure": "SIS drivetrain inspection",
-    "sub_section_prompt": "drivetrain_prompt"
+  "steps_handrails": {
+    "spec_text": "All access steps, ladders, and handrails secure. Bent/broken steps = RED (fall hazard). Missing grip surface = YELLOW. Platform grating secure.",
+    "failure_modes": ["bent step", "broken handrail", "missing grip tape", "loose platform grating", "damaged hinge"],
+    "procedure": "OSHA 1926.502 / CAT 797F operator safety manual",
+    "sub_section_prompt": "steps_handrails_prompt"
   },
-  "tracks_left": {
-    "spec_text": "Track tension sag: 30-40mm at measurement point. Master link cotter pins must be present. Sprocket teeth: replace at 50% wear.",
-    "failure_modes": ["overtension", "undertension", "master link wear", "roller flat spots"],
-    "procedure": "SIS 5J0900",
-    "sub_section_prompt": "undercarriage_tracks_prompt"
+  "frame": {
+    "spec_text": "Inspect main frame rails, cross members, welds for cracks. Any structural crack = RED. Surface rust = YELLOW. Pitting affecting structural integrity = RED.",
+    "failure_modes": ["frame rail crack", "cross member fatigue", "weld failure", "rust on structural members", "frame deformation"],
+    "procedure": "SIS 797F structural inspection SEHS9500",
+    "sub_section_prompt": "structural_integrity_prompt"
   },
-  "tracks_right": {
-    "spec_text": "Track tension sag: 30-40mm at measurement point. Master link cotter pins must be present. Sprocket teeth: replace at 50% wear.",
-    "failure_modes": ["overtension", "undertension", "master link wear", "roller flat spots"],
-    "procedure": "SIS 5J0900",
-    "sub_section_prompt": "undercarriage_tracks_prompt"
+  "hydraulics": {
+    "spec_text": "Inspect steering and hoist hydraulic hoses for abrasion, swelling, leaks at fittings. Active drips = RED. Minor seeping = YELLOW. Service interval: 4000h or 5 years.",
+    "failure_modes": ["hose abrasion", "fitting leak", "steering cylinder rod pitting", "pump whine", "hydraulic oil contamination"],
+    "procedure": "SIS hydraulic system SEHS9743",
+    "sub_section_prompt": "hydraulic_system_prompt"
+  },
+  "exhaust": {
+    "spec_text": "Dual exhaust stacks. Check for excessive smoke color (black=fuel, white=coolant, blue=oil). Stack secure, no cracks. Heat shields in place.",
+    "failure_modes": ["excessive black smoke", "white smoke (coolant)", "blue smoke (oil)", "stack crack", "heat shield missing"],
+    "procedure": "SIS exhaust system inspection",
+    "sub_section_prompt": "exhaust_prompt"
   }
 }

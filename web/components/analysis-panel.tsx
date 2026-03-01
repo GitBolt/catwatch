@@ -27,7 +27,8 @@ export function AnalysisPanel({ analysis, zoneTrends, hasMemoryContext }: Props)
 
   const sev = analysis.severity || "GREEN";
   const colors = SEVERITY_COLORS[sev] || SEVERITY_COLORS.GRAY;
-  const trend = analysis.zone ? zoneTrends[analysis.zone] : zoneTrends["_global"];
+  const trendKey = analysis.component || analysis.zone;
+  const trend = trendKey ? zoneTrends[trendKey] : zoneTrends["_global"];
 
   return (
     <div

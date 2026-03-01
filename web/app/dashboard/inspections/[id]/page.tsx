@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { SEVERITY_COLORS, ZONE_LABELS, type ZoneId } from "@/lib/constants";
+import { SEVERITY_COLORS } from "@/lib/constants";
 import Link from "next/link";
 import { ReportPreview } from "@/components/report-preview";
 import { FleetSimilarFindings } from "@/components/fleet-similar-findings";
@@ -92,7 +92,7 @@ export default async function InspectionDetailPage({
           <SeverityChip label="GRN" count={greenCount} color={SEVERITY_COLORS.GREEN} />
         </div>
         <span style={{ fontSize: 13, color: "var(--text-dim)" }}>
-          {inspectionSession.zonesSeen} zones · {inspectionSession.findings.length} findings
+          {inspectionSession.findings.length} findings
         </span>
         {inspectionSession.unitSerial && (
           <div style={{ fontSize: 13 }}>

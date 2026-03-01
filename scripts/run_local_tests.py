@@ -44,7 +44,7 @@ def test_prompts():
     assert "{zone}" in BRIEF_PROMPT and "{hours}" in BRIEF_PROMPT
     assert "step" in get_sub_section_prompt("steps_handrails_prompt").lower()
     assert "callout" in VLM_OUTPUT_SCHEMA
-    assert "CAT 325" in CAT_INSPECTION_PERSONA
+    assert "CAT 797F" in CAT_INSPECTION_PERSONA
     print("  prompts OK")
 
 

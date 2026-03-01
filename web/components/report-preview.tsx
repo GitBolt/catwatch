@@ -49,7 +49,6 @@ export function ReportPreview({ inspection }: Props) {
       created_at: inspection.createdAt,
       ended_at: inspection.endedAt,
       coverage_pct: inspection.coveragePct,
-      zones_seen: inspection.zonesSeen,
       findings: inspection.findings,
     };
     if (inspection.report?.data) {

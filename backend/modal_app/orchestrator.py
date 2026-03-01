@@ -189,10 +189,14 @@ def web():
                     timeout=120,
                 )
                 if not isinstance(analysis, dict):
-                    analysis = {"description": str(analysis), "severity": "GREEN", "findings": [], "callout": "", "confidence": 0.5, "zone": None}
+                    analysis = {"description": str(analysis), "severity": "GREEN", "findings": [], "callout": "", "confidence": 0.5, "component": None}
+                if "component" in analysis and "zone" not in analysis:
+                    analysis["zone"] = analysis["component"]
+                elif "zone" in analysis and "component" not in analysis:
+                    analysis["component"] = analysis["zone"]
                 analysis["triggered_by"] = triggered_by
 
-                new_zone = analysis.get("zone")
+                new_zone = analysis.get("component") or analysis.get("zone")
                 if new_zone:
                     last_vlm_zone = new_zone
 
@@ -210,7 +214,7 @@ def web():
                 try:
                     await ws.send_json({
                         "type": "analysis",
-                        "data": {"description": "VLM warming up, please wait...", "severity": "GREEN", "findings": [], "callout": "VLM loading", "confidence": 0.0, "zone": None},
+                        "data": {"description": "VLM warming up, please wait...", "severity": "GREEN", "findings": [], "callout": "VLM loading", "confidence": 0.0, "component": None},
                         "mode": inspection_mode, "frame_id": frame_id,
                         "client_ts": frame_client_ts, "server_ts": time.time(),
                     })
@@ -222,7 +226,7 @@ def web():
                 try:
                     await ws.send_json({
                         "type": "analysis",
-                        "data": {"description": f"VLM error: {str(e)[:80]}", "severity": "GREEN", "findings": [], "callout": "", "confidence": 0.0, "zone": None},
+                        "data": {"description": f"VLM error: {str(e)[:80]}", "severity": "GREEN", "findings": [], "callout": "", "confidence": 0.0, "component": None},
                         "mode": inspection_mode, "frame_id": frame_id,
                         "client_ts": frame_client_ts, "server_ts": time.time(),
                     })
@@ -626,9 +630,13 @@ def web():
                     timeout=120,
                 )
                 if not isinstance(analysis, dict):
-                    analysis = {"description": str(analysis), "severity": "GREEN", "findings": [], "callout": "", "confidence": 0.5, "zone": None}
+                    analysis = {"description": str(analysis), "severity": "GREEN", "findings": [], "callout": "", "confidence": 0.5, "component": None}
+                if "component" in analysis and "zone" not in analysis:
+                    analysis["zone"] = analysis["component"]
+                elif "zone" in analysis and "component" not in analysis:
+                    analysis["component"] = analysis["zone"]
                 analysis["triggered_by"] = triggered_by
-                new_zone = analysis.get("zone")
+                new_zone = analysis.get("component") or analysis.get("zone")
                 if new_zone:
                     session["last_vlm_zone"] = new_zone
 
@@ -643,7 +651,7 @@ def web():
                 severity = analysis.get("severity", "GREEN")
                 for f in analysis.get("findings", []):
                     if isinstance(f, str) and f.strip():
-                        zone = analysis.get("zone") or "unknown"
+                        zone = analysis.get("component") or analysis.get("zone") or "General"
                         finding_data = {"zone": zone, "rating": severity, "description": f, "createdAt": datetime.utcnow().isoformat() + "Z"}
                         if severity in ("RED", "YELLOW") and frame_b64:
                             finding_data["snapshot"] = frame_b64
@@ -655,7 +663,7 @@ def web():
                             print(f"[DB] save_finding error: {e}")
 
                 # ── Analysis history + severity trend ─────────────────
-                zone_key = analysis.get("zone") or "_global"
+                zone_key = analysis.get("component") or analysis.get("zone") or "_global"
                 hist = session["analysis_history"].setdefault(zone_key, [])
                 hist.append({
                     "severity": severity,
@@ -685,7 +693,7 @@ def web():
                 try:
                     await send_all({
                         "type": "analysis",
-                        "data": {"description": "VLM warming up...", "severity": "GREEN", "findings": [], "callout": "VLM loading", "confidence": 0.0, "zone": None},
+                        "data": {"description": "VLM warming up...", "severity": "GREEN", "findings": [], "callout": "VLM loading", "confidence": 0.0, "component": None},
                         "mode": session["mode"], "frame_id": frame_id,
                         "client_ts": frame_client_ts, "server_ts": time.time(),
                     })

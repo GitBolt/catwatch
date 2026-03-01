@@ -18,7 +18,7 @@
       "red_criteria": "Flat or damaged tires, tire blowouts, severe tire wear with cords showing, cracked or broken rims, loose or missing wheel hardware (lug nuts), severe rim corrosion with pitting.",
       "yellow_criteria": "Moderate tire wear with reduced tread, uneven tire wear patterns, minor tire damage (small cuts, surface cracking), minor rim damage (dents, surface rust), valve stem issues, pin and bushing wear.",
       "green_criteria": "Adequate tread depth, proper tire pressure, clean tire surface, structural rim integrity, clean rim surface.",
-      "note": "Most CAT equipment in dataset are tracked vehicles where tire/rim inspection is N/A."
+      "note": "Critical for CAT 797F — 6x 63-inch OTR tires (59/80R63), each weighing ~5 tons."
     },
     "engine_coolant_prompt": {
       "source_file": "catrack_samples/FailPrompt1",
@@ -32,19 +32,44 @@
       "title": "Hydraulic System Inspection",
       "use_baseline_with_spec": true
     },
-    "undercarriage_tracks_prompt": {
+    "dump_body_prompt": {
       "source_file": null,
-      "title": "Undercarriage and Tracks Inspection",
+      "title": "Dump Body and Liner Inspection",
+      "red_criteria": "Body structural crack at pivot points, liner worn through to body steel, tailgate latch mechanism failure, hinge pin seizure, body deformation affecting load capacity.",
+      "yellow_criteria": "Liner wear approaching replacement threshold, minor body dents not affecting structure, hinge pin wear within tolerance, tailgate seal deterioration.",
+      "green_criteria": "Body structure sound, liner in serviceable condition, tailgate operating correctly, hinge pins within spec.",
       "use_baseline_with_spec": true
     },
-    "boom_stick_prompt": {
+    "hoist_cylinders_prompt": {
       "source_file": null,
-      "title": "Boom and Stick Inspection",
+      "title": "Hoist Cylinder Inspection",
+      "red_criteria": "Active hydraulic oil leak from cylinder seal, rod scoring visible to naked eye, mounting pin failure, cylinder drift under load.",
+      "yellow_criteria": "Minor rod pitting, seal weeping (not dripping), mounting pin wear approaching limit, slow cylinder extension.",
+      "green_criteria": "Rod surface clean and smooth, seals dry, mounting pins secure, cylinders extend/retract normally.",
       "use_baseline_with_spec": true
     },
-    "bucket_attachments_prompt": {
+    "suspension_prompt": {
       "source_file": null,
-      "title": "Bucket and Attachments Inspection",
+      "title": "Suspension Strut Inspection",
+      "red_criteria": "Strut oil leak at seal, visible ride height below minimum, strut mount structural failure, rebound stop completely compressed.",
+      "yellow_criteria": "Low nitrogen charge (ride height approaching limit), minor oil seepage at strut seal, uneven ride height side-to-side, rebound stop wear.",
+      "green_criteria": "Ride height within spec, seals dry, strut mounts secure, even ride height across all 4 struts.",
+      "use_baseline_with_spec": true
+    },
+    "brakes_prompt": {
+      "source_file": null,
+      "title": "Brake System Inspection",
+      "red_criteria": "Brake cooling line leak, brake oil level critically low, disc wear indicator triggered beyond limit, caliper structural damage, brake fade reported.",
+      "yellow_criteria": "Disc wear approaching service limit, brake oil level approaching minimum, minor cooling line chafe, brake dust accumulation.",
+      "green_criteria": "Brake oil at proper level, cooling lines intact, disc wear within limits, no brake fade symptoms.",
+      "use_baseline_with_spec": true
+    },
+    "exhaust_prompt": {
+      "source_file": null,
+      "title": "Exhaust System Inspection",
+      "red_criteria": "Excessive white smoke (coolant leak into combustion), exhaust stack structural crack, heat shield missing exposing personnel areas.",
+      "yellow_criteria": "Light black smoke under load, minor exhaust stack corrosion, heat shield loose but present, exhaust gasket seepage.",
+      "green_criteria": "Clear exhaust, stacks structurally sound, heat shields secure, no gasket leaks.",
       "use_baseline_with_spec": true
     },
     "engine_system_prompt": {

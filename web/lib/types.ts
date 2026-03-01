@@ -24,7 +24,8 @@ export interface AnalysisData {
   findings: string[];
   callout: string;
   confidence: number;
-  zone: string | null;
+  component: string | null;
+  zone?: string | null;
 }
 
 export interface AnalysisMessage {

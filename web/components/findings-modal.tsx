@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SEVERITY_COLORS, ZONE_LABELS, type ZoneId } from "@/lib/constants";
+import { SEVERITY_COLORS } from "@/lib/constants";
 
 interface Finding {
   id: string;
@@ -78,7 +78,7 @@ export function FindingsModal({ findings }: Props) {
               {filtered.map((f) => {
                 const sev = f.rating as keyof typeof SEVERITY_COLORS;
                 const colors = SEVERITY_COLORS[sev] || SEVERITY_COLORS.GRAY;
-                const zoneLabel = ZONE_LABELS[f.zone as ZoneId] || f.zone.replace(/_/g, " ");
+                const zoneLabel = f.zone?.replace(/_/g, " ") || "General";
                 return (
                   <div
                     key={f.id}

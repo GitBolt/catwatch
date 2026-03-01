@@ -61,7 +61,7 @@ Pass identity so the AI remembers past inspections of the same unit or site:
 
 ```python
 # CAT mode — equipment serial
-cw.connect(source=0, mode="cat", unit_serial="CAT325-001", model="CAT 325", fleet_tag="fleet_alpha")
+cw.connect(source=0, mode="cat", unit_serial="797F-001", model="CAT 797F", fleet_tag="fleet_alpha")
 
 # General mode — site name
 cw.connect(source=0, mode="general", location="warehouse-7B")
@@ -111,7 +111,7 @@ Available callbacks: `on_detection` (YOLO, every frame), `on_analysis` (VLM, eve
 cw.ask("Is there hydraulic fluid leaking?")
 
 # Generate an inspection report
-cw.generate_report(model="CAT 325", serial="CAT0325F4K01847")
+cw.generate_report(model="CAT 797F", serial="797F-001")
 
 # Switch mode mid-session
 cw.set_mode("general")

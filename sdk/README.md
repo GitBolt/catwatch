@@ -22,7 +22,7 @@ pip install catwatch[picamera]
 from catwatch import CatWatch
 
 cw = CatWatch("cw_live_YOUR_API_KEY")
-cw.connect(source=0, mode="cat", unit_serial="CAT325-001")
+cw.connect(source=0, mode="cat", unit_serial="797F-001")
 
 @cw.on_analysis
 def handle(msg):
@@ -56,7 +56,7 @@ Create a session and connect to the inspection backend.
 | `source` | `int \| str \| Picamera2` | `0` | Camera index, video file path, RTSP URL, or Picamera2 object |
 | `mode` | `str` | `"general"` | `"general"` for open-ended inspection, `"cat"` for CAT equipment-specific |
 | `unit_serial` | `str` | `None` | Equipment serial number — enables fleet memory across inspections |
-| `model` | `str` | `None` | Equipment model (e.g. `"CAT 325"`) |
+| `model` | `str` | `None` | Equipment model (e.g. `"CAT 797F"`) |
 | `fleet_tag` | `str` | `None` | Fleet group identifier for cross-unit pattern matching |
 
 ```python
@@ -73,7 +73,7 @@ cw.connect(source="rtsp://192.168.1.10:8554/stream")
 from picamera2 import Picamera2
 cam = Picamera2()
 cam.start()
-cw.connect(source=cam, mode="cat", unit_serial="CAT325-007")
+cw.connect(source=cam, mode="cat", unit_serial="797F-007")
 ```
 
 ---
@@ -140,7 +140,7 @@ Fires on every YOLO detection cycle.
 def handle(msg):
     for det in msg["detections"]:
         print(f"{det['label']} ({det['confidence']:.0%}) zone={det['zone']}")
-    print(f"Coverage: {msg['coverage']}/15 zones, YOLO took {msg['yolo_ms']}ms")
+    print(f"Coverage: {msg['coverage']}/13 zones, YOLO took {msg['yolo_ms']}ms")
 ```
 
 `msg` keys: `detections`, `coverage`, `total_zones`, `yolo_ms`, `frame_id`, `mode`
@@ -243,7 +243,7 @@ def handle(msg):
 Ask the AI a question about what the camera currently sees. The answer arrives via `@cw.on_voice_answer`.
 
 ```python
-cw.ask("Is there any visible rust on the boom arm?")
+cw.ask("Is there any visible damage on the dump body?")
 ```
 
 ### `cw.set_mode(mode)`
@@ -282,8 +282,8 @@ Trigger a full inspection report. The result arrives via `@cw.on_report`.
 
 ```python
 cw.generate_report(
-    model="CAT 325",
-    serial="CAT325-001",
+    model="CAT 797F",
+    serial="797F-001",
     technician="John",
     hours=3847,
     duration_minutes=45,
@@ -305,13 +305,13 @@ cw.send({"type": "request_vlm_analysis"})
 When you pass `unit_serial` to `connect()`, the platform tracks inspection history for that unit across sessions using [Supermemory](https://supermemory.ai):
 
 ```python
-cw.connect(source=0, mode="cat", unit_serial="CAT325-001", fleet_tag="fleet_alpha")
+cw.connect(source=0, mode="cat", unit_serial="797F-001", fleet_tag="fleet_alpha")
 ```
 
 On subsequent inspections of the same unit:
 - The AI sees prior findings and can detect **progression** (e.g. YELLOW → RED)
 - Zone briefs include what was found last time
-- Fleet-wide patterns are surfaced (e.g. "3 other units had boom seal failures at similar hours")
+- Fleet-wide patterns are surfaced (e.g. "3 other units had hoist cylinder seal failures at similar hours")
 
 ---
 
@@ -340,8 +340,8 @@ cw = CatWatch("cw_live_YOUR_KEY")
 cw.connect(
     source=0,
     mode="cat",
-    unit_serial="CAT325-001",
-    model="CAT 325",
+    unit_serial="797F-001",
+    model="CAT 797F",
     fleet_tag="site_alpha",
 )
 cw.flip_camera()  # if camera is mounted upside down
@@ -350,7 +350,7 @@ print(f"Dashboard: {cw.dashboard_url}")
 
 @cw.on_detection
 def on_det(msg):
-    print(f"{len(msg['detections'])} objects | {msg['coverage']}/15 zones")
+    print(f"{len(msg['detections'])} objects | {msg['coverage']}/13 zones")
 
 @cw.on_analysis
 def on_analysis(msg):
@@ -364,7 +364,7 @@ def on_finding(msg):
 
 @cw.on_zone_first_seen
 def on_zone(msg):
-    print(f"New zone: {msg['zone']} ({len(cw.zones_seen)}/15)")
+    print(f"New zone: {msg['zone']} ({len(cw.zones_seen)}/13)")
 
 @cw.on_viewer_joined
 def on_viewer(msg):

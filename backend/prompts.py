@@ -225,7 +225,7 @@ Analyze this frame and respond in valid JSON with these exact keys:
 - findings: array of notable observations (max 3)
 - callout: most notable short callout in 4-6 words; use "Scene stable" if no meaningful change
 - confidence: 0.0 to 1.0
-- zone: best guess at what area this is (e.g. "workshop", "storage", "loading_dock", "office", "exterior", "walkway") — never null
+- component: best guess at what area or item this is (e.g. "Workshop Floor", "Storage Area", "Loading Dock", "Office", "Walkway", "Exterior"). Use human-readable names. Never null.
 """
 
 CAT_INSPECTION_PERSONA = """\
@@ -269,7 +269,7 @@ Analyze this frame. Respond in valid JSON with these exact keys:
 - findings: array of specific observations (max 3), empty if nothing notable
 - callout: the single most notable thing in 4-5 words (this is spoken aloud). If nothing changed or notable, use "Scene normal"
 - confidence: 0.0 to 1.0
-- zone: the component area visible in this frame as snake_case (e.g. tires_rims, dump_body, hoist_cylinders, suspension, cab, engine, cooling, drivetrain, brakes, frame, steps_handrails). If no equipment is visible, describe the area instead (e.g. workspace, floor_area, surroundings). Never return null."""
+- component: the specific part or area visible (e.g. "Steps / Ladder", "Hydraulic Hoses", "Radiator Grill", "Engine Enclosure", "Cab Glass", "Tires & Rims", "Frame", "Bucket", "Boom"). Use human-readable names, not snake_case. If no equipment, describe the area (e.g. "Workshop Floor", "Storage Area"). Never null."""
 
 
 BRIEF_PROMPT = """\
@@ -341,7 +341,7 @@ RED: Active failure, major structural damage, safety hazard, or fluid leak under
 """
 
 REPORT_PROMPT = """\
-You are generating a final inspection report based on real AI-detected findings.
+You are generating a final inspection report aligned with Caterpillar inspection standards.
 
 Unit: {model} — Serial: {serial} — {hours} operating hours
 Technician: {technician}
@@ -353,12 +353,13 @@ These are the actual findings detected by AI during this inspection:
 
 INSTRUCTIONS:
 - Analyze the findings above. They are REAL observations from YOLO object detection and VLM visual analysis.
-- For each RED or YELLOW finding, write a specific recommended action (what to do next).
-- For GREEN findings, briefly confirm what was checked and its condition.
+- Rate each component using standard codes: Good (acceptable condition), Fair (needs attention/monitoring), Poor (immediate action required).
+- For Fair or Poor items, write a specific recommended action.
+- For Good items, briefly confirm condition.
 - If findings mention specific damage (rust, leaks, cracks, wear), describe severity and urgency.
 - Do NOT invent findings that aren't in the data above.
 - Do NOT mark anything as "Good" unless there is a GREEN finding confirming it.
-- If a zone has no findings, it was NOT inspected — do not comment on it.
+- If a component was NOT inspected, do not include it.
 
 Generate a JSON report with this exact structure:
 {{
@@ -368,19 +369,19 @@ Generate a JSON report with this exact structure:
   "technician": "{technician}",
   "duration_minutes": {duration_minutes},
   "coverage_percent": {coverage_percent},
-  "overall_rating": "RED if any RED findings, YELLOW if any YELLOW, GREEN if all GREEN",
+  "overall_code": "Poor if any Poor, Fair if any Fair, Good if all Good",
   "findings": [
     {{
-      "zone": "zone name from the data",
-      "rating": "RED/YELLOW/GREEN",
-      "observation": "what AI detected — quote from the finding description",
-      "recommended_action": "specific next step: repair, replace, monitor, or none needed"
+      "component": "human-readable component name (e.g. Steps / Ladder, Hydraulic Hoses, Cab Glass)",
+      "code": "Good/Fair/Poor",
+      "remarks": "what AI detected — specific observation",
+      "recommended_action": "specific next step for Fair/Poor items, empty string for Good"
     }}
   ],
   "work_order_items": [
     {{
-      "priority": "URGENT/SCHEDULED/MONITOR",
-      "zone": "affected zone",
+      "priority": "Immediate/Scheduled/Monitor",
+      "component": "affected component",
       "action": "specific repair or replacement needed",
       "estimated_downtime": "hours estimate if applicable"
     }}
@@ -388,5 +389,5 @@ Generate a JSON report with this exact structure:
   "ai_executive_summary": "3-4 sentence plain English summary for a fleet manager. State the overall condition, highlight the most critical issue if any, note what percentage was covered, and recommend whether the unit is safe to operate."
 }}
 
-Only include work_order_items for RED and YELLOW findings. Be specific and practical.\
+Only include work_order_items for Fair and Poor findings. Be specific and practical.\
 """

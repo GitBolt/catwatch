@@ -44,7 +44,7 @@ _PTT_DEBOUNCE_S = 0.5
 def _parse_args():
     parser = argparse.ArgumentParser(description="Dronecat inspection client")
     parser.add_argument("--url",              default=os.environ.get("MODAL_WS_URL"))
-    parser.add_argument("--model",            default="CAT 325")
+    parser.add_argument("--model",            default="CAT 797F")
     parser.add_argument("--serial",           default="CAT0325F4K01847")
     parser.add_argument("--hours",            type=int,   default=2847)
     parser.add_argument("--technician",       default="Inspector")

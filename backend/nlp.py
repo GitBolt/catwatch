@@ -1,16 +1,19 @@
 import re
 
 ZONE_KEYWORDS = {
-    "hydraulic|hose|pump|filtration": "hydraulics",
-    "track|undercarriage|sprocket|roller|link": "undercarriage",
-    "bucket|cutting edge|teeth": "bucket",
-    "boom arm|boom|stick": "boom_arm",
-    "engine|oil level|belt|filter": "engine",
-    "cab|seat|mirror|gauge|horn|windshield|glass": "cab",
-    "cooling|coolant|radiator": "cooling",
-    "step|ladder|handrail|railing": "steps_handrails",
     "tire|rim|lug|wheel|tread": "tires_rims",
-    "structural|frame|weld|rust|corrosion": "structural",
+    "dump body|dump|liner|tailgate": "dump_body",
+    "hoist|hoist cylinder|hoist pin": "hoist_cylinders",
+    "suspension|strut|ride height|nitrogen": "suspension",
+    "engine|oil level|belt|filter|turbo": "engine",
+    "cooling|coolant|radiator|fan shroud": "cooling",
+    "drivetrain|transmission|torque converter|axle|final drive": "drivetrain",
+    "brake|disc brake|brake line|brake cooling": "brakes",
+    "cab|seat|mirror|gauge|horn|windshield|glass": "cab",
+    "step|ladder|handrail|railing": "steps_handrails",
+    "frame|structural|weld|rust|corrosion|cross member": "frame",
+    "hydraulic|hose|pump|steering cylinder": "hydraulics",
+    "exhaust|muffler|exhaust stack": "exhaust",
 }
 
 RATING_MAP = {

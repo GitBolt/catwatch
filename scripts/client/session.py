@@ -87,7 +87,7 @@ class Session:
         u   = self.unit_info
         dur = (datetime.now() - self.start_time).total_seconds() / 60
         pdf.set_font("Helvetica", "B", 18)
-        pdf.cell(0, 12, "CAT 325 Daily Walk-Around Inspection", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 12, "CAT 797F Daily Walk-Around Inspection", new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "", 10)
         pdf.cell(0, 6, f"Unit: {u.get('model','')} | Serial: {u.get('serial','')} | {u.get('hours',0)}h",
                  new_x="LMARGIN", new_y="NEXT")

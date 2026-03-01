@@ -20,19 +20,22 @@ export interface InspectionPDFData {
   } | null;
 }
 
-const AMBER = [245, 197, 24] as const;
-const BLACK = [0, 0, 0] as const;
-const WHITE = [255, 255, 255] as const;
-const DARK_GRAY = [60, 60, 60] as const;
-const MID_GRAY = [128, 128, 128] as const;
-const LIGHT_GRAY = [240, 240, 240] as const;
-const TABLE_BORDER = [180, 180, 180] as const;
-const GREEN_BG = [220, 245, 220] as const;
-const YELLOW_BG = [255, 248, 210] as const;
-const RED_BG = [255, 220, 220] as const;
-const GREEN_TEXT = [34, 120, 34] as const;
-const YELLOW_TEXT = [150, 120, 0] as const;
-const RED_TEXT = [180, 40, 40] as const;
+const AMBER: RGB = [245, 197, 24];
+const BLACK: RGB = [0, 0, 0];
+const WHITE: RGB = [255, 255, 255];
+const DARK_GRAY: RGB = [60, 60, 60];
+const MID_GRAY: RGB = [128, 128, 128];
+const LIGHT_GRAY: RGB = [240, 240, 240];
+const TABLE_BORDER: RGB = [180, 180, 180];
+
+const GOOD_BG: RGB = [220, 245, 220];
+const FAIR_BG: RGB = [255, 248, 210];
+const POOR_BG: RGB = [255, 220, 220];
+const GOOD_TEXT: RGB = [34, 120, 34];
+const FAIR_TEXT: RGB = [150, 120, 0];
+const POOR_TEXT: RGB = [180, 40, 40];
+
+type RGB = [number, number, number];
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" });
@@ -42,14 +45,21 @@ function formatTime(dateStr: string): string {
   return new Date(dateStr).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
-type RGB = [number, number, number];
-
-function getRatingColor(rating: string): { bg: RGB; text: RGB } {
+function ratingToCode(rating: string): string {
   switch (rating.toUpperCase()) {
-    case "GREEN": return { bg: [...GREEN_BG] as RGB, text: [...GREEN_TEXT] as RGB };
-    case "YELLOW": return { bg: [...YELLOW_BG] as RGB, text: [...YELLOW_TEXT] as RGB };
-    case "RED": return { bg: [...RED_BG] as RGB, text: [...RED_TEXT] as RGB };
-    default: return { bg: [...LIGHT_GRAY] as RGB, text: [...DARK_GRAY] as RGB };
+    case "GREEN": return "Good";
+    case "YELLOW": return "Fair";
+    case "RED": return "Poor";
+    default: return rating;
+  }
+}
+
+function getCodeStyle(code: string): { bg: RGB; text: RGB } {
+  switch (code) {
+    case "Good": return { bg: GOOD_BG, text: GOOD_TEXT };
+    case "Fair": return { bg: FAIR_BG, text: FAIR_TEXT };
+    case "Poor": return { bg: POOR_BG, text: POOR_TEXT };
+    default: return { bg: LIGHT_GRAY, text: DARK_GRAY };
   }
 }
 
@@ -60,13 +70,11 @@ function getDuration(start: string, end: string | null): string {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
-function humanizeZone(zone: string): string {
-  return zone
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+function humanize(s: string): string {
+  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const RATING_ORDER: Record<string, number> = { RED: 3, YELLOW: 2, GREEN: 1 };
+const CODE_ORDER: Record<string, number> = { Poor: 3, Fair: 2, Good: 1 };
 
 async function loadLogoBase64(): Promise<string | null> {
   try {
@@ -82,212 +90,256 @@ async function loadLogoBase64(): Promise<string | null> {
   }
 }
 
+function sectionBand(doc: jsPDF, y: number, title: string, margin: number, width: number): number {
+  doc.setFillColor(...AMBER);
+  doc.rect(margin, y, width, 7, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...BLACK);
+  doc.text(title.toUpperCase(), margin + 3, y + 5);
+  return y + 10;
+}
+
+function checkPage(doc: jsPDF, y: number, needed: number): number {
+  if (y + needed > doc.internal.pageSize.getHeight() - 20) {
+    doc.addPage();
+    return 14;
+  }
+  return y;
+}
+
 export async function generateInspectionPDF(data: InspectionPDFData): Promise<jsPDF> {
   const logoB64 = await loadLogoBase64();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 14;
   const contentWidth = pageWidth - margin * 2;
-  let y = 12;
-
-  // ── Header Band ─────────────────────────────────────────
-  doc.setFillColor(...AMBER);
-  doc.rect(0, 0, pageWidth, 28, "F");
-
-  if (logoB64) {
-    try { doc.addImage(logoB64, "PNG", margin, 3, 22, 22); } catch { /* skip */ }
-  }
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.setTextColor(...BLACK);
-  doc.text("CATWATCH", margin + 25, 18);
-
-  doc.setFontSize(14);
-  doc.text("Equipment Inspection Report", pageWidth - margin, 14, { align: "right" });
-
-  doc.setFontSize(8);
-  doc.setTextColor(...DARK_GRAY);
-  doc.text(`Report ID: ${data.sessionId.slice(0, 12)}`, pageWidth - margin, 22, { align: "right" });
-
-  y = 34;
-
-  // ── Session Info ────────────────────────────────────────
-  doc.setFillColor(...BLACK);
-  doc.rect(margin, y, contentWidth, 7, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...WHITE);
-  doc.text(`  INSPECTION SESSION: ${data.mode.toUpperCase()} MODE`, margin + 2, y + 5);
-  y += 10;
 
   const redCount = data.findings.filter((f) => f.rating === "RED").length;
   const yellowCount = data.findings.filter((f) => f.rating === "YELLOW").length;
   const greenCount = data.findings.filter((f) => f.rating === "GREEN").length;
 
+  const overallCode = redCount > 0 ? "Poor" : yellowCount > 0 ? "Fair" : "Good";
+  const reportData = data.report?.data as Record<string, unknown> | undefined;
+
+  // ── Header Band ─────────────────────────────────────────
+  doc.setFillColor(...AMBER);
+  doc.rect(0, 0, pageWidth, 26, "F");
+
+  if (logoB64) {
+    try { doc.addImage(logoB64, "PNG", margin, 2, 22, 22); } catch { /* skip */ }
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(...BLACK);
+  doc.text("CATWATCH", margin + 25, 16);
+
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text("Equipment Inspection Report", pageWidth - margin, 12, { align: "right" });
+
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...DARK_GRAY);
+  doc.text(`Report ID: ${data.sessionId.slice(0, 12)}`, pageWidth - margin, 20, { align: "right" });
+
+  let y = 32;
+
+  // ── INSPECTION DETAILS ──────────────────────────────────
+  y = sectionBand(doc, y, "Inspection Details", margin, contentWidth);
+
+  const equipType = reportData?.unit
+    ? (reportData.unit as Record<string, unknown>).model || "AI-Identified"
+    : data.mode === "cat" ? "CAT Equipment" : "General";
+
   autoTable(doc, {
     startY: y,
     head: [],
     body: [
-      ["Session ID", data.sessionId],
-      ["Date", formatDate(data.createdAt)],
-      ["Time", formatTime(data.createdAt)],
-      ["Status", data.status.charAt(0).toUpperCase() + data.status.slice(1)],
+      ["Inspector", "AI-Assisted (CatWatch)"],
+      ["Inspection Date", formatDate(data.createdAt)],
+      ["Report Date", formatDate(new Date().toISOString())],
+      ["Location", (reportData as any)?.location || "—"],
       ["Duration", getDuration(data.createdAt, data.endedAt)],
-      ["Coverage", `${Math.round(data.coveragePct)}%`],
-      ["Total Findings", `${data.findings.length} (${redCount} RED, ${yellowCount} YELLOW, ${greenCount} GREEN)`],
+      ["Mode", data.mode.toUpperCase()],
     ],
     theme: "grid",
-    margin: { left: margin, right: margin },
-    styles: { fontSize: 8, cellPadding: 2, lineColor: [...TABLE_BORDER], lineWidth: 0.3 },
+    margin: { left: margin, right: pageWidth / 2 + 2 },
+    styles: { fontSize: 8, cellPadding: 2, lineColor: TABLE_BORDER, lineWidth: 0.3 },
     columnStyles: {
-      0: { fontStyle: "bold", cellWidth: 40, fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY] },
-      1: { textColor: [...BLACK] },
+      0: { fontStyle: "bold", cellWidth: 35, fillColor: LIGHT_GRAY, textColor: DARK_GRAY },
+      1: { textColor: BLACK },
     },
   });
 
-  y = (doc as any).lastAutoTable.finalY + 6;
+  const detailsLeftY = (doc as any).lastAutoTable.finalY;
 
-  // ── Zone Summary (data-driven) ──────────────────────────
-  doc.setFillColor(...BLACK);
-  doc.rect(margin, y, contentWidth, 7, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...WHITE);
-  doc.text("  ZONE SUMMARY", margin + 2, y + 5);
-  y += 10;
+  autoTable(doc, {
+    startY: y,
+    head: [],
+    body: [
+      ["Equipment", String(equipType)],
+      ["Serial / ID", String(reportData?.unit ? (reportData.unit as Record<string, unknown>).serial || "—" : "—")],
+      ["Operating Hours", String(reportData?.unit ? (reportData.unit as Record<string, unknown>).operating_hours || "—" : "—")],
+      ["Coverage", `${Math.round(data.coveragePct)}%`],
+      ["Total Findings", `${data.findings.length}`],
+      ["Status", data.status.charAt(0).toUpperCase() + data.status.slice(1)],
+    ],
+    theme: "grid",
+    margin: { left: pageWidth / 2 + 2, right: margin },
+    styles: { fontSize: 8, cellPadding: 2, lineColor: TABLE_BORDER, lineWidth: 0.3 },
+    columnStyles: {
+      0: { fontStyle: "bold", cellWidth: 35, fillColor: LIGHT_GRAY, textColor: DARK_GRAY },
+      1: { textColor: BLACK },
+    },
+  });
 
-  // Group findings by zone, compute worst rating per zone
-  const zoneSummary = new Map<string, { worst: string; count: number; descriptions: string[] }>();
-  data.findings.forEach((f) => {
-    const key = f.zone || "general";
-    const existing = zoneSummary.get(key);
-    if (existing) {
-      existing.count++;
-      if ((RATING_ORDER[f.rating] || 0) > (RATING_ORDER[existing.worst] || 0)) {
-        existing.worst = f.rating;
-      }
-      if (f.rating !== "GREEN" && existing.descriptions.length < 3) {
-        existing.descriptions.push(f.description);
-      }
-    } else {
-      zoneSummary.set(key, {
-        worst: f.rating,
-        count: 1,
-        descriptions: f.rating !== "GREEN" ? [f.description] : [],
-      });
+  y = Math.max(detailsLeftY, (doc as any).lastAutoTable.finalY) + 4;
+
+  // ── OVERALL ASSESSMENT ──────────────────────────────────
+  y = sectionBand(doc, y, "Overall Assessment", margin, contentWidth);
+
+  const codeStyle = getCodeStyle(overallCode);
+  autoTable(doc, {
+    startY: y,
+    head: [],
+    body: [
+      [
+        { content: "Overall Code", styles: { fontStyle: "bold" as const, fillColor: LIGHT_GRAY, textColor: DARK_GRAY } },
+        { content: overallCode.toUpperCase(), styles: { fontStyle: "bold" as const, fillColor: codeStyle.bg, textColor: codeStyle.text, halign: "center" as const, fontSize: 10 } },
+        { content: `${redCount} Poor  ·  ${yellowCount} Fair  ·  ${greenCount} Good`, styles: { textColor: MID_GRAY } },
+      ],
+    ],
+    theme: "grid",
+    margin: { left: margin, right: margin },
+    styles: { fontSize: 8, cellPadding: 3, lineColor: TABLE_BORDER, lineWidth: 0.3, textColor: BLACK },
+    columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 25 }, 2: {} },
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 4;
+
+  // ── AI EXECUTIVE SUMMARY ────────────────────────────────
+  const summary = reportData?.ai_executive_summary as string | undefined;
+  if (summary) {
+    y = checkPage(doc, y, 25);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(...MID_GRAY);
+    const lines = doc.splitTextToSize(summary, contentWidth - 8);
+    doc.setDrawColor(...TABLE_BORDER);
+    doc.setLineWidth(0.3);
+    const boxH = lines.length * 3.5 + 6;
+    doc.rect(margin, y, contentWidth, boxH);
+    let ty = y + 4;
+    for (const line of lines) {
+      doc.text(line, margin + 4, ty);
+      ty += 3.5;
     }
-  });
+    y = ty + 4;
+  }
 
-  // Sort: RED first, then YELLOW, then GREEN
-  const sortedZones = [...zoneSummary.entries()].sort(
-    (a, b) => (RATING_ORDER[b[1].worst] || 0) - (RATING_ORDER[a[1].worst] || 0)
-  );
+  // ── INSPECTION FINDINGS (CAT-style: Component | Code | Remarks) ──
+  y = checkPage(doc, y, 20);
+  y = sectionBand(doc, y, "Inspection Findings", margin, contentWidth);
 
-  const zoneRows: any[][] = sortedZones.map(([zone, info]) => {
-    const colors = getRatingColor(info.worst);
-    const remarks = info.descriptions.length > 0
-      ? info.descriptions.join("; ")
-      : info.worst === "GREEN" ? "No issues detected" : "";
-    return [
-      { content: humanizeZone(zone), styles: { fontStyle: "bold" as const } },
-      {
-        content: info.worst,
-        styles: { fillColor: [...colors.bg], textColor: [...colors.text], fontStyle: "bold" as const },
-      },
-      { content: `${info.count}`, styles: { halign: "center" as const } },
-      { content: remarks, styles: {} },
-    ];
-  });
+  const findingRows = data.findings
+    .map((f) => {
+      const code = ratingToCode(f.rating);
+      const style = getCodeStyle(code);
+      return {
+        code,
+        codeOrder: CODE_ORDER[code] || 0,
+        row: [
+          { content: humanize(f.zone || "General"), styles: { fontStyle: "bold" as const } },
+          { content: code, styles: { fillColor: style.bg, textColor: style.text, fontStyle: "bold" as const, halign: "center" as const } },
+          { content: f.description, styles: {} },
+        ],
+        time: formatTime(f.createdAt),
+      };
+    })
+    .sort((a, b) => b.codeOrder - a.codeOrder);
 
-  if (zoneRows.length === 0) {
-    zoneRows.push([
-      { content: "No zones inspected", styles: { fontStyle: "italic" as const } },
-      { content: "—", styles: {} },
-      { content: "0", styles: { halign: "center" as const } },
-      { content: "Insufficient data for assessment", styles: {} },
-    ]);
+  if (findingRows.length === 0) {
+    findingRows.push({
+      code: "—",
+      codeOrder: 0,
+      row: [
+        { content: "No findings recorded", styles: {} },
+        { content: "—", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" as const, halign: "center" as const } },
+        { content: "Insufficient inspection data", styles: {} },
+      ],
+      time: "",
+    });
   }
 
   autoTable(doc, {
     startY: y,
     head: [[
-      { content: "Zone", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
-      { content: "Rating", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
-      { content: "Findings", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
-      { content: "Remarks", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+      { content: "Component", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
+      { content: "CODE", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
+      { content: "REMARKS", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
     ]],
-    body: zoneRows,
+    body: findingRows.map((r) => r.row),
     theme: "grid",
     margin: { left: margin, right: margin },
-    styles: { fontSize: 8, cellPadding: 2.5, lineColor: [...TABLE_BORDER], lineWidth: 0.3, textColor: [...BLACK] },
-    columnStyles: { 0: { cellWidth: 38 }, 1: { cellWidth: 18, halign: "center" }, 2: { cellWidth: 18, halign: "center" }, 3: {} },
+    styles: { fontSize: 7.5, cellPadding: 2.5, lineColor: TABLE_BORDER, lineWidth: 0.3, textColor: BLACK },
+    columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 18, halign: "center" }, 2: {} },
   });
 
   y = (doc as any).lastAutoTable.finalY + 6;
 
-  // ── RED & YELLOW Findings Detail ────────────────────────
-  const criticalFindings = data.findings.filter((f) => f.rating === "RED" || f.rating === "YELLOW");
+  // ── ACTION ITEMS (Fair & Poor only) ─────────────────────
+  const actionFindings = data.findings.filter((f) => f.rating === "RED" || f.rating === "YELLOW");
 
-  if (criticalFindings.length > 0) {
-    if (y > 230) { doc.addPage(); y = 14; }
+  if (actionFindings.length > 0) {
+    y = checkPage(doc, y, 20);
+    y = sectionBand(doc, y, "Action Items", margin, contentWidth);
 
-    doc.setFillColor(...BLACK);
-    doc.rect(margin, y, contentWidth, 7, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(...WHITE);
-    doc.text("  ACTION ITEMS — RED & YELLOW FINDINGS", margin + 2, y + 5);
-    y += 10;
-
-    const criticalRows = criticalFindings
-      .sort((a, b) => (RATING_ORDER[b.rating] || 0) - (RATING_ORDER[a.rating] || 0))
+    const actionRows = actionFindings
+      .sort((a, b) => (CODE_ORDER[ratingToCode(b.rating)] || 0) - (CODE_ORDER[ratingToCode(a.rating)] || 0))
       .map((f) => {
-        const colors = getRatingColor(f.rating);
+        const code = ratingToCode(f.rating);
+        const style = getCodeStyle(code);
+        const priority = f.rating === "RED" ? "Immediate" : "Scheduled";
         return [
-          formatTime(f.createdAt),
-          { content: humanizeZone(f.zone || "general"), styles: { fontStyle: "bold" as const } },
-          { content: f.rating, styles: { fillColor: colors.bg, textColor: colors.text, fontStyle: "bold" as const, halign: "center" as const } },
-          f.description,
+          { content: priority, styles: { fontStyle: "bold" as const, textColor: style.text } },
+          { content: humanize(f.zone || "General"), styles: { fontStyle: "bold" as const } },
+          { content: code, styles: { fillColor: style.bg, textColor: style.text, fontStyle: "bold" as const, halign: "center" as const } },
+          { content: f.description, styles: {} },
         ];
       });
 
     autoTable(doc, {
       startY: y,
       head: [[
-        { content: "Time", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
-        { content: "Zone", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
-        { content: "Rating", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
-        { content: "Description", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+        { content: "Priority", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
+        { content: "Component", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
+        { content: "CODE", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
+        { content: "Description / Action Required", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
       ]],
-      body: criticalRows,
+      body: actionRows,
       theme: "grid",
       margin: { left: margin, right: margin },
-      styles: { fontSize: 7.5, cellPadding: 2, lineColor: [...TABLE_BORDER], lineWidth: 0.3, textColor: [...BLACK] },
-      columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 32 }, 2: { cellWidth: 18, halign: "center" }, 3: {} },
+      styles: { fontSize: 7.5, cellPadding: 2.5, lineColor: TABLE_BORDER, lineWidth: 0.3, textColor: BLACK },
+      columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 35 }, 2: { cellWidth: 16, halign: "center" }, 3: {} },
     });
 
     y = (doc as any).lastAutoTable.finalY + 6;
   }
 
-  // ── Full Findings Log ───────────────────────────────────
+  // ── COMPLETE FINDINGS LOG ───────────────────────────────
   if (data.findings.length > 0) {
-    if (y > 230) { doc.addPage(); y = 14; }
-
-    doc.setFillColor(...BLACK);
-    doc.rect(margin, y, contentWidth, 7, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(...WHITE);
-    doc.text("  COMPLETE FINDINGS LOG", margin + 2, y + 5);
-    y += 10;
+    y = checkPage(doc, y, 20);
+    y = sectionBand(doc, y, "Complete Findings Log", margin, contentWidth);
 
     const allRows = data.findings.map((f) => {
-      const colors = getRatingColor(f.rating);
+      const code = ratingToCode(f.rating);
+      const style = getCodeStyle(code);
       return [
         formatTime(f.createdAt),
-        { content: humanizeZone(f.zone || "general"), styles: { fontStyle: "bold" as const } },
-        { content: f.rating, styles: { fillColor: colors.bg, textColor: colors.text, fontStyle: "bold" as const, halign: "center" as const } },
+        { content: humanize(f.zone || "General"), styles: { fontStyle: "bold" as const } },
+        { content: code, styles: { fillColor: style.bg, textColor: style.text, fontStyle: "bold" as const, halign: "center" as const } },
         f.description,
       ];
     });
@@ -295,66 +347,19 @@ export async function generateInspectionPDF(data: InspectionPDFData): Promise<js
     autoTable(doc, {
       startY: y,
       head: [[
-        { content: "Time", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
-        { content: "Zone", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
-        { content: "Rating", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
-        { content: "Description", styles: { fillColor: [...LIGHT_GRAY], textColor: [...DARK_GRAY], fontStyle: "bold" } },
+        { content: "Time", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
+        { content: "Component", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
+        { content: "CODE", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
+        { content: "Remarks", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
       ]],
       body: allRows,
       theme: "grid",
       margin: { left: margin, right: margin },
-      styles: { fontSize: 7.5, cellPadding: 2, lineColor: [...TABLE_BORDER], lineWidth: 0.3, textColor: [...BLACK] },
-      columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 32 }, 2: { cellWidth: 18, halign: "center" }, 3: {} },
+      styles: { fontSize: 7.5, cellPadding: 2, lineColor: TABLE_BORDER, lineWidth: 0.3, textColor: BLACK },
+      columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 35 }, 2: { cellWidth: 16, halign: "center" }, 3: {} },
     });
 
     y = (doc as any).lastAutoTable.finalY + 6;
-  }
-
-  // ── AI Executive Summary ────────────────────────────────
-  if (data.report) {
-    if (y > 220) { doc.addPage(); y = 14; }
-
-    doc.setFillColor(...BLACK);
-    doc.rect(margin, y, contentWidth, 7, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(...WHITE);
-    doc.text("  AI EXECUTIVE SUMMARY", margin + 2, y + 5);
-    y += 10;
-
-    let summaryText = "";
-    if (typeof data.report.data === "string") {
-      summaryText = data.report.data;
-    } else if (data.report.data && typeof data.report.data === "object") {
-      const rd = data.report.data as Record<string, unknown>;
-      if (rd.ai_executive_summary) {
-        summaryText = String(rd.ai_executive_summary);
-      } else {
-        summaryText = JSON.stringify(data.report.data, null, 2);
-      }
-    }
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...DARK_GRAY);
-
-    const lines = doc.splitTextToSize(summaryText, contentWidth - 8);
-    const lineHeight = 3.5;
-    const boxHeight = Math.min(lines.length * lineHeight + 8, 200);
-    doc.setDrawColor(...TABLE_BORDER);
-    doc.setLineWidth(0.3);
-    doc.rect(margin, y, contentWidth, boxHeight);
-
-    let textY = y + 5;
-    for (const line of lines) {
-      if (textY > doc.internal.pageSize.getHeight() - 20) {
-        doc.addPage();
-        textY = 14;
-      }
-      doc.text(line, margin + 4, textY);
-      textY += lineHeight;
-    }
-    y = textY + 6;
   }
 
   // ── Footer ──────────────────────────────────────────────
