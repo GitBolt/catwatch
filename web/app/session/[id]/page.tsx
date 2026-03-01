@@ -6,7 +6,7 @@ import { useSessionSocket } from "@/hooks/use-session-socket";
 import { VideoCanvas } from "@/components/video-canvas";
 import { DetectionOverlay } from "@/components/detection-overlay";
 import { AnalysisPanel } from "@/components/analysis-panel";
-import { ZonePanel } from "@/components/zone-panel";
+import { InspectionChecklist } from "@/components/inspection-checklist";
 import { FindingsList } from "@/components/findings-list";
 import { InsightsPanel } from "@/components/insights-panel";
 import { VoiceButton } from "@/components/voice-button";
@@ -65,10 +65,6 @@ export default function LiveSessionPage() {
           </h1>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
-            <div className="card stat-card">
-              <div style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{s.zones_inspected}</div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>of {s.total_zones} zones</div>
-            </div>
             <div className="card stat-card">
               <div style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{s.coverage_pct}%</div>
               <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>coverage</div>
@@ -242,7 +238,7 @@ export default function LiveSessionPage() {
           />
           <AnalysisPanel analysis={analysis} zoneTrends={zoneTrends} hasMemoryContext={hasMemory} />
           {insights.length > 0 && <InsightsPanel insights={insights} />}
-          <ZonePanel zonesSeen={zonesSeen} coverage={coverage} totalZones={totalZones || 15} equipmentInfo={equipmentInfo} mode={mode} />
+          <InspectionChecklist componentsSeen={zonesSeen} coverage={coverage} equipmentInfo={equipmentInfo} mode={mode} />
           <FindingsList findings={findings} hasMemoryContext={hasMemory} />
         </div>
       </div>

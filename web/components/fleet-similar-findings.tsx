@@ -69,9 +69,10 @@ export function FleetSimilarFindings({ unitSerial, findings }: Props) {
             letterSpacing: "0.06em",
             textTransform: "uppercase",
             color: "var(--amber)",
-            padding: "2px 6px",
+            padding: "3px 8px",
             borderRadius: "var(--radius-sm)",
-            border: "1px solid rgba(196, 162, 76, 0.3)",
+            border: "1px solid rgba(245, 197, 24, 0.4)",
+            background: "rgba(245, 197, 24, 0.08)",
             textDecoration: "none",
             transition: "opacity 0.2s",
           }}

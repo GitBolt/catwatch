@@ -83,18 +83,18 @@ export function UnitHistoryPanel({ unitSerial, unitModel, fleetTag, location, me
         href="https://supermemory.ai"
         target="_blank"
         rel="noopener noreferrer"
-        style={{ display: "flex", alignItems: "center", gap: 5, textDecoration: "none", opacity: 0.7, transition: "opacity 0.2s" }}
+        style={{ display: "flex", alignItems: "center", gap: 5, textDecoration: "none", opacity: 0.9, transition: "opacity 0.2s" }}
         onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.7"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.9"; }}
       >
         <Image
           src="/supermemory.png"
           alt="Supermemory"
           width={13}
           height={13}
-          style={{ borderRadius: 2, filter: "brightness(1.8)" }}
+          style={{ borderRadius: 2, filter: "brightness(2.5) contrast(1.2)" }}
         />
-        <span style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.02em" }}>
+        <span style={{ fontSize: 9, color: "rgba(255,255,255,0.7)", letterSpacing: "0.02em" }}>
           Powered by Supermemory
         </span>
       </a>

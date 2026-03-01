@@ -45,6 +45,7 @@ model Session {
   unitSerial  String?
   model       String?
   fleetTag    String?
+  location    String?
   findings    Finding[]
   report      Report?
 }

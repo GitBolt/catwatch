@@ -41,7 +41,10 @@ export default async function InspectionDetailPage({
     createdAt: inspectionSession.createdAt.toISOString(),
     endedAt: inspectionSession.endedAt?.toISOString() ?? null,
     coveragePct: inspectionSession.coveragePct,
-    zonesSeen: inspectionSession.zonesSeen,
+    unitSerial: inspectionSession.unitSerial ?? null,
+    unitModel: inspectionSession.model ?? null,
+    fleetTag: inspectionSession.fleetTag ?? null,
+    location: (inspectionSession as any).location ?? null,
     findings: inspectionSession.findings.map((f) => ({
       zone: f.zone,
       rating: f.rating,

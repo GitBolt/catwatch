@@ -47,9 +47,7 @@ export function TopBar({
 
       <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 12, color: "var(--text-muted)" }}>
         <span>YOLO {yoloMs.toFixed(0)}ms</span>
-        <span>
-          {coverage}/{totalZones} zones
-        </span>
+        <span>{coverage} components</span>
 
         <div
           style={{

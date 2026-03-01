@@ -48,16 +48,17 @@ async def create_session(
     unit_serial: str = None,
     model: str = None,
     fleet_tag: str = None,
+    location: str = None,
 ):
     """Insert a new inspection session."""
     pool = await get_pool()
     await pool.execute(
         """
         INSERT INTO "Session" (id, "apiKeyId", "userId", mode, status, "createdAt",
-                               "unitSerial", model, "fleetTag")
-        VALUES ($1, $2, $3, $4, 'active', NOW(), $5, $6, $7)
+                               "unitSerial", model, "fleetTag", location)
+        VALUES ($1, $2, $3, $4, 'active', NOW(), $5, $6, $7, $8)
         """,
-        session_id, api_key_id, user_id, mode, unit_serial, model, fleet_tag,
+        session_id, api_key_id, user_id, mode, unit_serial, model, fleet_tag, location,
     )
 
 
@@ -67,7 +68,8 @@ async def get_session(session_id: str):
     row = await pool.fetchrow(
         """
         SELECT id, "apiKeyId" AS api_key_id, "userId" AS user_id,
-               mode, status, "unitSerial" AS unit_serial, model, "fleetTag" AS fleet_tag
+               mode, status, "unitSerial" AS unit_serial, model, "fleetTag" AS fleet_tag,
+               location
         FROM "Session"
         WHERE id = $1
         """,

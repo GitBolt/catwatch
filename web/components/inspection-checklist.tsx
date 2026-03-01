@@ -3,35 +3,32 @@
 import type { EquipmentInfo } from "@/lib/types";
 
 interface Props {
-  zonesSeen: Set<string>;
+  componentsSeen: Set<string>;
   coverage: number;
-  totalZones: number;
   equipmentInfo: EquipmentInfo | null;
   mode: string;
 }
 
-function formatZoneName(zone: string): string {
-  return zone.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+function formatName(s: string): string {
+  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function ZonePanel({ zonesSeen, coverage, totalZones, equipmentInfo, mode }: Props) {
+export function InspectionChecklist({ componentsSeen, coverage, equipmentInfo, mode }: Props) {
   const isCatMode = mode === "cat";
 
-  const dynamicZones = isCatMode ? (equipmentInfo?.inspectable_zones ?? []) : [];
-  const allZoneNames = dynamicZones.length > 0
-    ? dynamicZones
-    : [...zonesSeen];
+  const expected = isCatMode ? (equipmentInfo?.inspectable_zones ?? []) : [];
+  const allNames = expected.length > 0 ? expected : [...componentsSeen];
 
   const title = isCatMode
-    ? (equipmentInfo ? "Checklist" : "Zones")
-    : "Areas";
+    ? (equipmentInfo ? "Checklist" : "Components")
+    : "Areas Detected";
 
   return (
     <div className="card" style={{ padding: "10px 12px" }}>
       <div style={{ marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h3 style={{ fontSize: 12, fontWeight: 600 }}>{title}</h3>
         <span style={{ fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>
-          {zonesSeen.size}{isCatMode ? `/${totalZones || "?"}` : ""} · {coverage}%
+          {componentsSeen.size} · {coverage}%
         </span>
       </div>
 
@@ -41,18 +38,17 @@ export function ZonePanel({ zonesSeen, coverage, totalZones, equipmentInfo, mode
         </div>
       )}
 
-      {allZoneNames.length === 0 && (
+      {allNames.length === 0 && (
         <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
           {isCatMode ? "Identifying equipment..." : "Scanning..."}
         </div>
       )}
 
-      {/* General mode: compact chips */}
-      {!isCatMode && allZoneNames.length > 0 && (
+      {!isCatMode && allNames.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-          {allZoneNames.map((zone) => (
+          {allNames.map((name) => (
             <span
-              key={zone}
+              key={name}
               style={{
                 fontSize: 10,
                 padding: "2px 7px",
@@ -62,38 +58,37 @@ export function ZonePanel({ zonesSeen, coverage, totalZones, equipmentInfo, mode
                 color: "var(--text-muted)",
               }}
             >
-              {formatZoneName(zone)}
+              {formatName(name)}
             </span>
           ))}
         </div>
       )}
 
-      {/* CAT mode: checklist rows */}
-      {isCatMode && allZoneNames.length > 0 && (
+      {isCatMode && allNames.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {allZoneNames.map((zone) => {
-            const seen = zonesSeen.has(zone);
+          {allNames.map((name) => {
+            const seen = componentsSeen.has(name);
             return (
-              <div key={zone} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "1px 0" }}>
+              <div key={name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "1px 0" }}>
                 <span className={seen ? "dot dot-green" : "dot dot-gray"} />
                 <span style={{ color: seen ? "var(--text)" : "var(--text-dim)" }}>
-                  {formatZoneName(zone)}
+                  {formatName(name)}
                 </span>
               </div>
             );
           })}
 
-          {dynamicZones.length > 0 && [...zonesSeen].filter((z) => !dynamicZones.includes(z)).length > 0 && (
+          {expected.length > 0 && [...componentsSeen].filter((c) => !expected.includes(c)).length > 0 && (
             <>
               <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 4, marginBottom: 1 }}>
                 Also detected
               </div>
-              {[...zonesSeen]
-                .filter((z) => !dynamicZones.includes(z))
-                .map((zone) => (
-                  <div key={zone} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "1px 0" }}>
+              {[...componentsSeen]
+                .filter((c) => !expected.includes(c))
+                .map((name) => (
+                  <div key={name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "1px 0" }}>
                     <span className="dot dot-green" />
-                    <span style={{ color: "var(--text)" }}>{formatZoneName(zone)}</span>
+                    <span style={{ color: "var(--text)" }}>{formatName(name)}</span>
                   </div>
                 ))}
             </>

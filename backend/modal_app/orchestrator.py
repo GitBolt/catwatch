@@ -377,8 +377,11 @@ def web():
                 for zone_id in zone_events:
                     await ws.send_json({"type": "zone_first_seen", "zone": zone_id})
 
+                # In cat mode, VLM fires on cadence regardless of YOLO detections
+                # (YOLO trained on catalog parts can't spatially detect 797F components)
+                vlm_has_trigger = detections or inspection_mode == "cat"
                 if (
-                    detections
+                    vlm_has_trigger
                     and not vlm_busy
                     and latest_frame_b64
                     and (time.monotonic() - last_vlm_run_ts) >= VLM_ANALYSIS_INTERVAL_S
@@ -509,6 +512,7 @@ def web():
         await db_create_session(
             session_id, key_info["api_key_id"], key_info["user_id"], mode,
             unit_serial=unit_serial, model=unit_model, fleet_tag=fleet_tag,
+            location=location,
         )
 
         _sessions[session_id] = {
@@ -649,16 +653,30 @@ def web():
 
                 from .db import save_finding
                 severity = analysis.get("severity", "GREEN")
+                component = analysis.get("component") or analysis.get("zone") or "General"
+                now_iso = datetime.utcnow().isoformat() + "Z"
+
+                desc = analysis.get("description", "")
+                if desc and desc.strip():
+                    finding_data = {"zone": component, "rating": severity, "description": desc.strip(), "createdAt": now_iso}
+                    if severity in ("RED", "YELLOW") and frame_b64:
+                        finding_data["snapshot"] = frame_b64
+                    session["zone_findings"].setdefault(component, []).append(finding_data)
+                    await send_all({"type": "finding", "data": finding_data})
+                    try:
+                        await save_finding(session["id"], component, severity, desc.strip())
+                    except Exception as e:
+                        print(f"[DB] save_finding error: {e}")
+
                 for f in analysis.get("findings", []):
-                    if isinstance(f, str) and f.strip():
-                        zone = analysis.get("component") or analysis.get("zone") or "General"
-                        finding_data = {"zone": zone, "rating": severity, "description": f, "createdAt": datetime.utcnow().isoformat() + "Z"}
+                    if isinstance(f, str) and f.strip() and f.strip() != desc.strip():
+                        finding_data = {"zone": component, "rating": severity, "description": f, "createdAt": now_iso}
                         if severity in ("RED", "YELLOW") and frame_b64:
                             finding_data["snapshot"] = frame_b64
-                        session["zone_findings"].setdefault(zone, []).append(finding_data)
+                        session["zone_findings"].setdefault(component, []).append(finding_data)
                         await send_all({"type": "finding", "data": finding_data})
                         try:
-                            await save_finding(session["id"], zone, severity, f)
+                            await save_finding(session["id"], component, severity, f)
                         except Exception as e:
                             print(f"[DB] save_finding error: {e}")
 
