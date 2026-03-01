@@ -26,6 +26,9 @@ export default function DashboardLayout({
             <Link href="/dashboard/inspections" className="nav-link" style={{ fontSize: 13, color: "var(--text-muted)" }}>
               Inspections
             </Link>
+            <Link href="/dashboard/simulator" className="nav-link" style={{ fontSize: 13, color: "var(--text-muted)" }}>
+              Simulator
+            </Link>
           </div>
           <Link
             href="/dashboard/settings"

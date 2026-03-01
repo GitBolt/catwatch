@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { ReportPreview } from "@/components/report-preview";
 import { FleetSimilarFindings } from "@/components/fleet-similar-findings";
+import { ModelViewerLoader } from "@/components/model-viewer-loader";
 
 export default async function InspectionDetailPage({
   params,
@@ -91,6 +92,16 @@ export default async function InspectionDetailPage({
               {inspectionSession.model && <span style={{ color: "var(--text-dim)", marginLeft: 8 }}>{inspectionSession.model}</span>}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 3D Inspection View */}
+      {inspectionSession.status !== "active" && inspectionData.findings.length > 0 && (
+        <div style={{ padding: 24, background: "var(--bg-card)", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, letterSpacing: "-0.01em" }}>
+            3D Inspection View
+          </h2>
+          <ModelViewerLoader findings={inspectionData.findings} />
         </div>
       )}
 
