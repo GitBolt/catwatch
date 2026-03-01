@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { SEVERITY_COLORS, ZONE_LABELS, type ZoneId } from "@/lib/constants";
 import Link from "next/link";
-import { DownloadPDFButton } from "@/components/download-pdf-button";
+import { ReportPreview } from "@/components/report-preview";
 import { FleetSimilarFindings } from "@/components/fleet-similar-findings";
 
 export default async function InspectionDetailPage({
@@ -34,6 +34,25 @@ export default async function InspectionDetailPage({
     )
     : null;
 
+  const inspectionData = {
+    sessionId: inspectionSession.id,
+    mode: inspectionSession.mode,
+    status: inspectionSession.status,
+    createdAt: inspectionSession.createdAt.toISOString(),
+    endedAt: inspectionSession.endedAt?.toISOString() ?? null,
+    coveragePct: inspectionSession.coveragePct,
+    zonesSeen: inspectionSession.zonesSeen,
+    findings: inspectionSession.findings.map((f) => ({
+      zone: f.zone,
+      rating: f.rating,
+      description: f.description,
+      createdAt: f.createdAt.toISOString(),
+    })),
+    report: inspectionSession.report
+      ? { data: inspectionSession.report.data }
+      : null,
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -56,28 +75,6 @@ export default async function InspectionDetailPage({
         >
           {inspectionSession.status}
         </span>
-        <div style={{ marginLeft: "auto" }}>
-          <DownloadPDFButton
-            inspection={{
-              sessionId: inspectionSession.id,
-              mode: inspectionSession.mode,
-              status: inspectionSession.status,
-              createdAt: inspectionSession.createdAt.toISOString(),
-              endedAt: inspectionSession.endedAt?.toISOString() ?? null,
-              coveragePct: inspectionSession.coveragePct,
-              zonesSeen: inspectionSession.zonesSeen,
-              findings: inspectionSession.findings.map((f) => ({
-                zone: f.zone,
-                rating: f.rating,
-                description: f.description,
-                createdAt: f.createdAt.toISOString(),
-              })),
-              report: inspectionSession.report
-                ? { data: inspectionSession.report.data }
-                : null,
-            }}
-          />
-        </div>
       </div>
 
       {/* Metadata */}
@@ -165,19 +162,8 @@ export default async function InspectionDetailPage({
         }))}
       />
 
-      {/* Report */}
-      {inspectionSession.report && (
-        <div>
-          <h2 style={{ marginBottom: 16, fontSize: 18, fontWeight: 600 }}>Report</h2>
-          <div className="card" style={{ padding: 24 }}>
-            <pre style={{ whiteSpace: "pre-wrap", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
-              {typeof inspectionSession.report.data === "string"
-                ? inspectionSession.report.data
-                : JSON.stringify(inspectionSession.report.data, null, 2)}
-            </pre>
-          </div>
-        </div>
-      )}
+      {/* Report — PDF preview + download */}
+      <ReportPreview inspection={inspectionData} />
     </div>
   );
 }

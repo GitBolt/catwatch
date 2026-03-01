@@ -5,6 +5,7 @@ import type {
   Detection,
   AnalysisData,
   FindingData,
+  EquipmentInfo,
   ServerMessage,
 } from "@/lib/types";
 
@@ -19,25 +20,40 @@ export interface UnitProfile {
   };
 }
 
+export interface SessionEndSummary {
+  session_id: string;
+  zones_inspected: number;
+  total_zones: number;
+  coverage_pct: number;
+  findings_count: number;
+  mode: string;
+}
+
 interface SessionState {
   connected: boolean;
-  frame: string | null;
+  frame: Blob | null;
   frameId: number;
   detections: Detection[];
   analysis: AnalysisData | null;
   findings: FindingData[];
   zonesSeen: Set<string>;
   coverage: number;
+  totalZones: number;
   mode: string;
   yoloMs: number;
   voiceAnswer: string | null;
+  transcript: string | null;
+  equipmentInfo: EquipmentInfo | null;
   report: Record<string, unknown> | null;
   unitSerial: string | null;
   unitModel: string | null;
   fleetTag: string | null;
   unitProfile: UnitProfile | null;
   unitProfileLoading: boolean;
+  sessionEnded: SessionEndSummary | null;
   send: (msg: Record<string, unknown>) => void;
+  sendAudio: (audioBase64: string) => void;
+  endSession: () => void;
 }
 
 const BACKEND_WS = process.env.NEXT_PUBLIC_BACKEND_WS || "wss://heyaabis--dronecat-web.modal.run";
@@ -82,24 +98,27 @@ async function fetchUnitProfile(unitSerial: string): Promise<UnitProfile | null>
 export function useSessionSocket(sessionId: string | null): SessionState {
   const wsRef = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
-  const [frame, setFrame] = useState<string | null>(null);
+  const [frame, setFrame] = useState<Blob | null>(null);
   const [frameId, setFrameId] = useState(0);
   const [detections, setDetections] = useState<Detection[]>([]);
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
   const [findings, setFindings] = useState<FindingData[]>([]);
   const [zonesSeen, setZonesSeen] = useState<Set<string>>(new Set());
   const [coverage, setCoverage] = useState(0);
+  const [totalZones, setTotalZones] = useState(0);
   const [mode, setMode] = useState("general");
+  const [equipmentInfo, setEquipmentInfo] = useState<EquipmentInfo | null>(null);
   const [yoloMs, setYoloMs] = useState(0);
   const [voiceAnswer, setVoiceAnswer] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState<string | null>(null);
   const [report, setReport] = useState<Record<string, unknown> | null>(null);
   const [unitSerial, setUnitSerial] = useState<string | null>(null);
   const [unitModel, setUnitModel] = useState<string | null>(null);
   const [fleetTag, setFleetTag] = useState<string | null>(null);
   const [unitProfile, setUnitProfile] = useState<UnitProfile | null>(null);
   const [unitProfileLoading, setUnitProfileLoading] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState<SessionEndSummary | null>(null);
 
-  // Track unit serial to avoid duplicate profile fetches
   const profileFetchedRef = useRef<string | null>(null);
 
   const send = useCallback((msg: Record<string, unknown>) => {
@@ -108,7 +127,14 @@ export function useSessionSocket(sessionId: string | null): SessionState {
     }
   }, []);
 
-  // When we get a unit serial, fetch its Supermemory profile and send context to backend
+  const sendAudio = useCallback((audioBase64: string) => {
+    send({ type: "audio_question", audio: audioBase64 });
+  }, [send]);
+
+  const endSession = useCallback(() => {
+    send({ type: "end_session" });
+  }, [send]);
+
   useEffect(() => {
     if (!unitSerial || profileFetchedRef.current === unitSerial) return;
     profileFetchedRef.current = unitSerial;
@@ -118,7 +144,6 @@ export function useSessionSocket(sessionId: string | null): SessionState {
       setUnitProfile(profile);
       setUnitProfileLoading(false);
 
-      // Compile profile into a context string and send to backend
       if (profile) {
         const parts: string[] = [];
         if (profile.profile.static.length > 0) {
@@ -146,6 +171,7 @@ export function useSessionSocket(sessionId: string | null): SessionState {
 
       const url = `${BACKEND_WS}/ws/view/${sessionId}`;
       const ws = new WebSocket(url);
+      ws.binaryType = "arraybuffer";
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -163,6 +189,16 @@ export function useSessionSocket(sessionId: string | null): SessionState {
       ws.onerror = () => ws.close();
 
       ws.onmessage = (event) => {
+        if (event.data instanceof ArrayBuffer) {
+          if (event.data.byteLength < 5) return;
+          const view = new DataView(event.data);
+          const id = view.getUint32(0);
+          const jpegBytes = event.data.slice(4);
+          setFrame(new Blob([jpegBytes], { type: "image/jpeg" }));
+          setFrameId(id);
+          return;
+        }
+
         const msg: ServerMessage = JSON.parse(event.data);
 
         switch (msg.type) {
@@ -172,14 +208,10 @@ export function useSessionSocket(sessionId: string | null): SessionState {
             ws.close();
             break;
 
-          case "frame":
-            setFrame(msg.data);
-            setFrameId(msg.frame_id);
-            break;
-
           case "detection":
             setDetections(msg.detections);
             setCoverage(msg.coverage);
+            if (msg.total_zones) setTotalZones(msg.total_zones);
             setMode(msg.mode);
             setYoloMs(msg.yolo_ms);
             break;
@@ -212,6 +244,17 @@ export function useSessionSocket(sessionId: string | null): SessionState {
             }
             break;
 
+          case "transcript":
+            setTranscript(msg.text);
+            break;
+
+          case "equipment_identified":
+            setEquipmentInfo(msg.data);
+            if (msg.data.inspectable_zones?.length) {
+              setTotalZones(msg.data.inspectable_zones.length);
+            }
+            break;
+
           case "zone_first_seen":
             setZonesSeen((prev) => new Set([...prev, msg.zone]));
             break;
@@ -232,6 +275,12 @@ export function useSessionSocket(sessionId: string | null): SessionState {
             }
             if (msg.unit_model) setUnitModel(msg.unit_model);
             if (msg.fleet_tag) setFleetTag(msg.fleet_tag);
+            break;
+
+          case "session_ended":
+            stopped = true;
+            setSessionEnded(msg.data);
+            setConnected(false);
             break;
         }
       };
@@ -255,15 +304,21 @@ export function useSessionSocket(sessionId: string | null): SessionState {
     findings,
     zonesSeen,
     coverage,
+    totalZones,
     mode,
     yoloMs,
     voiceAnswer,
+    transcript,
+    equipmentInfo,
     report,
     unitSerial,
     unitModel,
     fleetTag,
     unitProfile,
     unitProfileLoading,
+    sessionEnded,
     send,
+    sendAudio,
+    endSession,
   };
 }

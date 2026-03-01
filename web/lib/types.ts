@@ -41,6 +41,8 @@ export interface FindingData {
   zone: string;
   rating: "GREEN" | "YELLOW" | "RED";
   description: string;
+  createdAt?: string;
+  snapshot?: string;
 }
 
 export interface FindingMessage {
@@ -92,6 +94,35 @@ export interface ErrorMessage {
   message: string;
 }
 
+export interface SessionEndedMessage {
+  type: "session_ended";
+  data: {
+    session_id: string;
+    zones_inspected: number;
+    total_zones: number;
+    coverage_pct: number;
+    findings_count: number;
+    mode: string;
+  };
+}
+
+export interface TranscriptMessage {
+  type: "transcript";
+  text: string;
+}
+
+export interface EquipmentInfo {
+  equipment_type: string;
+  model_guess: string | null;
+  visible_text: string | null;
+  inspectable_zones: string[];
+}
+
+export interface EquipmentIdentifiedMessage {
+  type: "equipment_identified";
+  data: EquipmentInfo;
+}
+
 export type ServerMessage =
   | DetectionMessage
   | AnalysisMessage
@@ -102,7 +133,10 @@ export type ServerMessage =
   | FrameMessage
   | SessionStateMessage
   | ZoneBriefMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | SessionEndedMessage
+  | TranscriptMessage
+  | EquipmentIdentifiedMessage;
 
 // Session types for the dashboard
 export interface SessionSummary {

@@ -66,11 +66,14 @@ export function AnalysisPanel({ analysis }: Props) {
           ))}
         </ul>
       )}
-      {analysis.zone && (
-        <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-dim)" }}>
-          Zone: {analysis.zone}
-        </div>
-      )}
+      <div style={{ marginTop: 8, display: "flex", gap: 12, fontSize: 12, color: "var(--text-dim)" }}>
+        {analysis.zone && <span>Zone: {analysis.zone}</span>}
+        {typeof analysis.confidence === "number" && (
+          <span style={{ opacity: 0.7 }}>
+            Confidence: {Math.round(analysis.confidence * 100)}%
+          </span>
+        )}
+      </div>
     </div>
   );
 }
