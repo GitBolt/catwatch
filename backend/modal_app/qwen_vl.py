@@ -30,6 +30,10 @@ class Qwen25VLInspector:
         self.processor = AutoProcessor.from_pretrained(MODEL_ID)
         print(f"[Qwen2VL] Loaded {MODEL_ID} on A100.")
 
+        from faster_whisper import WhisperModel
+        self.whisper = WhisperModel("small.en", device="cuda", compute_type="float16")
+        print("[Whisper] Loaded small.en on CUDA.")
+
     def _run(self, messages, max_new_tokens=512):
         from qwen_vl_utils import process_vision_info
 
@@ -119,3 +123,52 @@ class Qwen25VLInspector:
     def generate_report(self, prompt):
         messages = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
         return self._run(messages, max_new_tokens=2048)
+
+    @modal.method()
+    def identify_equipment(self, image_b64):
+        """Identify equipment type, model, and inspectable zones from a single frame."""
+        prompt = (
+            "You are a Caterpillar equipment identification specialist.\n"
+            "Look at this image carefully. Identify the equipment and read any visible text.\n\n"
+            "Return ONLY valid JSON:\n"
+            "{\n"
+            '  "equipment_type": "excavator" | "wheel_loader" | "dozer" | "motor_grader" | '
+            '"articulated_truck" | "telehandler" | "backhoe_loader" | "skid_steer" | "compact_track_loader" | "other",\n'
+            '  "model_guess": "e.g. CAT 325, CAT 982M, CAT D8T — best guess from visual cues",\n'
+            '  "visible_text": "any serial number, model plate, or hour meter text you can read" or null,\n'
+            '  "inspectable_zones": ["list of major component areas that should be inspected on this equipment type"]\n'
+            "}\n\n"
+            "For inspectable_zones, list the actual component groups relevant to THIS equipment type. "
+            "Examples:\n"
+            "- Excavator: undercarriage, tracks, boom, stick, bucket, hydraulic_cylinders, hydraulic_hoses, cab, engine, cooling_system, swing_bearing, counterweight, attachments\n"
+            "- Wheel loader: tires, rims, loader_arms, bucket, hydraulic_cylinders, hydraulic_hoses, cab, engine, cooling_system, drivetrain, axles, counterweight\n"
+            "- Dozer: tracks, undercarriage, blade, push_arms, hydraulic_cylinders, cab, engine, cooling_system, ripper, final_drives\n"
+            "Use snake_case. Be specific to what you see."
+        )
+        messages = [
+            {"role": "user", "content": [
+                self._image_message(image_b64),
+                {"type": "text", "text": prompt},
+            ]},
+        ]
+        raw = self._run(messages, max_new_tokens=512)
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        if start != -1 and end > start:
+            try:
+                return json.loads(raw[start:end])
+            except json.JSONDecodeError:
+                pass
+        return {"equipment_type": "unknown", "model_guess": None, "visible_text": None, "inspectable_zones": []}
+
+    @modal.method()
+    def transcribe_audio(self, audio_bytes: bytes) -> str:
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
+            f.write(audio_bytes)
+            tmp_path = f.name
+        try:
+            segments, _ = self.whisper.transcribe(tmp_path, beam_size=3, language="en")
+            return " ".join(s.text.strip() for s in segments).strip()
+        finally:
+            os.unlink(tmp_path)

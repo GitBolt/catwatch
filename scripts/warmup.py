@@ -11,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from backend.modal_app import app
 from backend.modal_app.yolo_detector import YoloDetector
 from backend.modal_app.qwen_vl import Qwen25VLInspector
-from backend.modal_app.siglip2 import SigLIP2PartsIdentifier
 
 DUMMY_IMG = (
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4"
@@ -40,13 +39,6 @@ def main():
     qwen = Qwen25VLInspector()
     result = qwen.zone_brief.remote("Say hello in one word.")
     print(f"  -> '{result[:50]}' in {time.time() - t0:.1f}s")
-    print()
-
-    print("[SigLIP2] Warming up on A10G...")
-    t0 = time.time()
-    siglip = SigLIP2PartsIdentifier()
-    result = siglip.embed_image.remote(DUMMY_IMG)
-    print(f"  -> embedding dim={len(result)} in {time.time() - t0:.1f}s")
 
     print()
     print(f"All containers warm in {time.time() - t_total:.1f}s total")

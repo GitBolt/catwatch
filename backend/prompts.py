@@ -77,7 +77,7 @@ def format_spec_context(detected_zone_ids, spec_kb):
                 f"[{zone_id}] {entry['spec_text']} "
                 f"Common failures: {failures}. Ref: {entry.get('procedure', '')}."
             )
-    return ("CAT 325 specs for visible zones:\n" + "\n".join(specs)) if specs else ""
+    return ("CAT specs for visible zones:\n" + "\n".join(specs)) if specs else ""
 
 
 def format_yolo_context(detections):
@@ -172,12 +172,12 @@ def _condensed_zone_criteria(zone_id):
     return block
 
 
-def build_zone_inspection_prompt(zone_id, mode="cat"):
-    """Construct a (persona, schema) tuple with zone-specific CATrack criteria.
+def build_zone_inspection_prompt(zone_id, mode="cat", equipment_info=None):
+    """Construct a (persona, schema) tuple with zone-specific criteria.
 
     - If zone_id is known and mode is "cat", injects condensed RED/YELLOW/GREEN
-      criteria and SMCS codes into the prompt so the VLM applies the correct
-      inspection methodology for the visible area.
+      criteria and SMCS codes so the VLM applies the correct methodology.
+    - Uses equipment_info (from auto-ID) to contextualize the inspection.
     - Falls back to generic personas when zone is unknown or mode is "general".
     """
     if mode != "cat":
@@ -185,13 +185,18 @@ def build_zone_inspection_prompt(zone_id, mode="cat"):
 
     zone_block = _condensed_zone_criteria(zone_id) if zone_id else ""
 
+    persona = CAT_INSPECTION_PERSONA
+    if equipment_info:
+        equip_type = equipment_info.get("equipment_type", "unknown")
+        model = equipment_info.get("model_guess", "")
+        if model:
+            persona += f"\nEquipment identified: {model} ({equip_type})."
+        zones_list = equipment_info.get("inspectable_zones", [])
+        if zones_list:
+            persona += f"\nInspectable zones for this unit: {', '.join(zones_list)}."
+
     if zone_block:
-        persona = (
-            f"{CAT_INSPECTION_PERSONA}\n\n"
-            f"--- CATrack Inspection Criteria ---\n{zone_block}"
-        )
-    else:
-        persona = CAT_INSPECTION_PERSONA
+        persona = f"{persona}\n\n--- CATrack Inspection Criteria ---\n{zone_block}"
 
     schema = VLM_OUTPUT_SCHEMA + "\n\n" + SMCS_CONTEXT
     return persona, schema
@@ -218,14 +223,13 @@ Analyze this frame and respond in valid JSON with these exact keys:
 """
 
 CAT_INSPECTION_PERSONA = """\
-You are a visual inspection co-pilot assisting a CAT equipment technician on a CAT 325 excavator. \
+You are a visual inspection co-pilot assisting a Caterpillar equipment technician. \
 FIRST describe what you actually see in this frame — the environment, people, \
 equipment, activity, lighting conditions. THEN if you see heavy equipment \
 (especially Caterpillar/CAT machines, typically yellow body with black trim), \
-assess its condition focusing on: hydraulic hoses (abrasion, swelling, leaks), \
-tracks and rollers, bucket teeth and cutting edge, boom/stick pins, cab glass, \
-engine area, cooling system (radiator fins, hoses), steps and handrails, \
-structural welds and frame integrity, attachment coupler.
+assess the condition of every visible component: look for hydraulic leaks, \
+wear patterns, structural cracks, fluid stains, loose hardware, damaged guards, \
+worn ground-engaging tools, and any safety hazards.
 
 Severity rules:
 - GREEN: no equipment issues, or component in acceptable condition
@@ -243,12 +247,12 @@ Analyze this frame. Respond in valid JSON with these exact keys:
 - findings: array of specific observations (max 3), empty if nothing notable
 - callout: the single most notable thing in 4-5 words (this is spoken aloud). If nothing changed or notable, use "Scene normal"
 - confidence: 0.0 to 1.0
-- zone: inspection zone if equipment visible (hydraulics, undercarriage, bucket, boom_arm, stick, cab, engine, cooling, steps_handrails, tires_rims, structural, attachments, drivetrain, tracks_left, tracks_right) or null"""
+- zone: the component area visible in this frame as snake_case (e.g. hydraulic_hoses, undercarriage, bucket, cab, engine, cooling_system, tracks, loader_arms, blade) or null if no equipment"""
 
 
 BRIEF_PROMPT = """\
 You are a senior CAT technician briefing a junior tech as their drone \
-approaches the {zone} on a CAT 325 with {hours} operating hours.
+approaches the {zone} area on a Caterpillar unit with {hours} operating hours.
 
 Zone's CAT sub-section focus: {sub_section_title}
 Unit history at this zone: {unit_history}
@@ -269,7 +273,7 @@ Rules:
 """
 
 SPEC_PROMPT = """\
-You are verifying a CAT 325 TA-1 inspection finding.
+You are verifying a Caterpillar equipment inspection finding.
 
 Zone: {zone}
 Technician rating: {tech_rating}
@@ -298,11 +302,12 @@ Return ONLY valid JSON:
 """
 
 SMCS_CONTEXT = """\
-SMCS Code Reference (CAT 325) — pick the closest code and include "smcs_code" in your JSON:
-1000=Engine | 1050=Turbocharger | 1300=Cooling System | 3000=Electrical
+SMCS Code Reference (Caterpillar) — pick the closest code and include "smcs_code" in your JSON:
+1000=Engine | 1050=Turbocharger | 1300=Cooling System | 3000=Electrical | 3200=Lights
 4000=Undercarriage | 4050=Track Rollers | 4051=Track Shoes | 4055=Idlers | 4056=Sprockets
 5000=Hydraulic System | 5050=Pilot Hydraulic | 5060=Hydraulic Cylinders | 5070=Hydraulic Hoses
-6000=Boom/Stick Structure | 6500=Swing System | 7000=Implements | 7050=Bucket
+6000=Boom/Stick/Arm Structure | 6500=Swing System | 7000=Implements | 7050=Bucket | 7060=Blade
+7200=Ripper | 7300=Loader Linkage | 8000=Drivetrain | 8050=Transmission | 8100=Axles | 8200=Final Drives
 If uncertain, use the group-level code (e.g. 4000 instead of 4050).
 
 Severity definitions:
@@ -312,7 +317,7 @@ RED: Active failure, major structural damage, safety hazard, or fluid leak under
 """
 
 REPORT_PROMPT = """\
-You are generating a final TA-1 inspection report for a CAT 325.
+You are generating a final walk-around inspection report for a Caterpillar unit.
 
 Unit: {model} — Serial: {serial} — {hours} operating hours
 Technician: {technician}

@@ -61,6 +61,23 @@ async def create_session(
     )
 
 
+async def get_session(session_id: str):
+    """Fetch a session row from the database. Returns dict or None."""
+    pool = await get_pool()
+    row = await pool.fetchrow(
+        """
+        SELECT id, "apiKeyId" AS api_key_id, "userId" AS user_id,
+               mode, status, "unitSerial" AS unit_serial, model, "fleetTag" AS fleet_tag
+        FROM "Session"
+        WHERE id = $1
+        """,
+        session_id,
+    )
+    if row:
+        return dict(row)
+    return None
+
+
 async def save_finding(session_id: str, zone: str, rating: str, description: str):
     """Insert a finding for a session."""
     pool = await get_pool()

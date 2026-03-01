@@ -22,12 +22,20 @@ yolo_image = (
 )
 
 
+def _download_whisper():
+    from faster_whisper import WhisperModel
+    WhisperModel("small.en", device="cpu", compute_type="int8")
+
+
 qwen_image = (
     modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg")
     .pip_install(
         "transformers", "torch", "torchvision",
         "accelerate", "qwen-vl-utils", "Pillow", "numpy",
+        "faster-whisper",
     )
+    .run_function(_download_whisper)
 )
 
 web_image = (
