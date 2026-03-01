@@ -69,12 +69,12 @@ export function TopBar({
             General
           </button>
           <button
-            onClick={() => onModeChange("cat")}
+            onClick={() => onModeChange("797")}
             style={{
               padding: "4px 12px",
               fontSize: 12,
-              background: mode === "cat" ? "var(--amber)" : "transparent",
-              color: mode === "cat" ? "#1a1714" : "var(--text-dim)",
+              background: mode === "797" ? "var(--amber)" : "transparent",
+              color: mode === "797" ? "#1a1714" : "var(--text-dim)",
             }}
           >
             CAT 797F

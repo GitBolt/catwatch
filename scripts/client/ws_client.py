@@ -209,7 +209,7 @@ def _on_detection(msg, frame_send_ts, fast_events):
     shared["coverage"]                 = msg.get("coverage", 0)
     shared["total_zones"]              = msg.get("total_zones", 15)
     shared["yolo_ms"]                  = msg.get("yolo_ms", 0)
-    if msg.get("mode") in ("general", "cat"):
+    if msg.get("mode") in ("general", "797"):
         shared["inspection_mode"] = msg["mode"]
 
     det_zones = {d.get("zone") for d in shared["detections"] if d.get("zone")}
@@ -242,7 +242,7 @@ def _on_analysis(msg, last_callout_key, last_callout_spoken_ts):
 
     shared["last_analysis_frame_id"] = frame_id
     shared["last_analysis_ts"]        = time.time()
-    if msg.get("mode") in ("general", "cat"):
+    if msg.get("mode") in ("general", "797"):
         shared["inspection_mode"] = msg["mode"]
 
     data         = msg.get("data", {})

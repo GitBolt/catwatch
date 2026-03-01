@@ -19,7 +19,7 @@ from .quality import blur_score, motion_score
 from .source import VideoSource
 from .protocol import Protocol
 
-_MODE_BYTE = {"general": 0, "cat": 1}
+_MODE_BYTE = {"general": 0, "797": 1}
 
 
 class CatWatch:
@@ -28,7 +28,7 @@ class CatWatch:
     Example::
 
         cw = CatWatch("cw_live_...")
-        cw.connect(source=0, mode="cat", unit_serial="797F-001")
+        cw.connect(source=0, mode="797", unit_serial="797F-001")
 
         @cw.on_analysis
         def on_analysis(msg):
@@ -79,7 +79,7 @@ class CatWatch:
 
     @property
     def mode(self):
-        """Current inspection mode ('general' or 'cat')."""
+        """Current inspection mode ('general' or '797')."""
         return self._mode
 
     @property
@@ -114,7 +114,7 @@ class CatWatch:
         Args:
             source: Camera index (int), video file path (str), RTSP URL (str),
                     or a Picamera2 object.
-            mode: Inspection mode — 'general' or 'cat'.
+            mode: Inspection mode — 'general' or '797'.
             unit_serial: Equipment serial number for fleet tracking.
             model: Equipment model (e.g. 'CAT 797F').
             fleet_tag: Fleet group identifier.
@@ -231,7 +231,7 @@ class CatWatch:
     def on_mode_change(self, fn):
         """Called when the inspection mode changes.
 
-        ``msg`` keys: ``mode`` ('general' or 'cat')
+        ``msg`` keys: ``mode`` ('general' or '797')
         """
         self._callbacks["mode"] = fn
         return fn
@@ -257,9 +257,9 @@ class CatWatch:
         self.send({"type": "voice_question", "text": question})
 
     def set_mode(self, mode):
-        """Switch inspection mode ('general' or 'cat')."""
-        if mode not in ("general", "cat"):
-            raise ValueError("mode must be 'general' or 'cat'")
+        """Switch inspection mode ('general' or '797')."""
+        if mode not in ("general", "797"):
+            raise ValueError("mode must be 'general' or '797'")
         self._mode = mode
         self.send({"type": "set_mode", "mode": mode})
 

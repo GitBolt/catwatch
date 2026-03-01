@@ -34,7 +34,7 @@ class YoloDetector:
         from PIL import Image
         import time
 
-        model = self.cat_model if mode == "cat" else self.general_model
+        model = self.cat_model if mode == "797" else self.general_model
 
         img_bytes = base64.b64decode(frame_b64)
         image = Image.open(io.BytesIO(img_bytes)).convert("RGB")

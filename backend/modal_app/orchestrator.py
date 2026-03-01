@@ -324,7 +324,7 @@ def web():
         async def run_voice_answer(question, frame_b64):
             print(f"[VOICE Q] {question[:60]}")
             try:
-                if inspection_mode in ("cat", "797"):
+                if inspection_mode == "797":
                     context = "You are inspecting a CAT 797F mining haul truck."
                 else:
                     context = "You are a visual copilot for general scene and safety monitoring."
@@ -391,11 +391,8 @@ def web():
                 for zone_id in zone_events:
                     await ws.send_json({"type": "zone_first_seen", "zone": zone_id})
 
-                # In cat mode, VLM fires on cadence regardless of YOLO detections
-                # (YOLO trained on catalog parts can't spatially detect 797F components)
-                vlm_has_trigger = detections or inspection_mode == "cat"
                 if (
-                    vlm_has_trigger
+                    detections
                     and not vlm_busy
                     and latest_frame_b64
                     and (time.monotonic() - last_vlm_run_ts) >= VLM_ANALYSIS_INTERVAL_S
@@ -427,7 +424,7 @@ def web():
                     frame_id = int(msg.get("frame_id", 0))
                     frame_client_ts = float(msg.get("client_ts", 0))
                     incoming_mode = str(msg.get("mode", "")).lower()
-                    if incoming_mode in ("general", "cat", "797"):
+                    if incoming_mode in ("general", "797"):
                         inspection_mode = incoming_mode
                     latest_frame_b64 = frame_b64
                     latest_frame_id = frame_id
@@ -472,7 +469,7 @@ def web():
 
                 elif msg_type == "set_mode":
                     requested_mode = str(msg.get("mode", "")).lower()
-                    if requested_mode in ("general", "cat", "797"):
+                    if requested_mode in ("general", "797"):
                         inspection_mode = requested_mode
                     await ws.send_json({"type": "mode", "mode": inspection_mode})
 
@@ -775,7 +772,7 @@ def web():
 
         async def run_voice_session(question, frame_b64):
             try:
-                if session["mode"] in ("cat", "797"):
+                if session["mode"] == "797":
                     context = "You are inspecting a CAT 797F mining haul truck."
                 else:
                     context = "You are a visual copilot."
@@ -861,7 +858,7 @@ def web():
                     session["pending_frame"] = None
                     asyncio.create_task(process_yolo_session(pf[0], pf[1], pf[2]))
 
-        _MODE_MAP = {0: "general", 1: "cat", 2: "797"}
+        _MODE_MAP = {0: "general", 1: "797"}
 
         try:
             while True:
@@ -879,7 +876,7 @@ def web():
                     jpeg_bytes = raw_bytes[13:]
 
                     incoming_mode = _MODE_MAP.get(mode_byte, "general")
-                    if incoming_mode in ("general", "cat", "797"):
+                    if incoming_mode in ("general", "797"):
                         session["mode"] = incoming_mode
 
                     session["latest_frame_b64"] = base64.b64encode(jpeg_bytes).decode("ascii")
@@ -911,7 +908,7 @@ def web():
                     frame_id = int(msg.get("frame_id", 0))
                     frame_client_ts = float(msg.get("client_ts", 0))
                     incoming_mode = str(msg.get("mode", "")).lower()
-                    if incoming_mode in ("general", "cat", "797"):
+                    if incoming_mode in ("general", "797"):
                         session["mode"] = incoming_mode
                     session["latest_frame_b64"] = frame_b64
                     session["latest_frame_id"] = frame_id
@@ -948,7 +945,7 @@ def web():
 
                 elif msg_type == "set_mode":
                     requested_mode = str(msg.get("mode", "")).lower()
-                    if requested_mode in ("general", "cat", "797"):
+                    if requested_mode in ("general", "797"):
                         session["mode"] = requested_mode
                     await send_all({"type": "mode", "mode": session["mode"]})
 
@@ -1192,7 +1189,7 @@ def web():
                     )
                 elif msg_type == "set_mode":
                     requested_mode = str(msg.get("mode", "")).lower()
-                    if requested_mode in ("general", "cat"):
+                    if requested_mode in ("general", "797"):
                         session["mode"] = requested_mode
                     await _broadcast(session, {"type": "mode", "mode": session["mode"]})
                 elif msg_type == "request_vlm_analysis":
@@ -1233,7 +1230,7 @@ def web():
         try:
             audio_bytes = base64.b64decode(audio_b64)
             frame_b64 = session.get("latest_frame_b64") or ""
-            context = "You are inspecting a CAT 797F mining haul truck." if session["mode"] == "cat" else "You are a visual copilot."
+            context = "You are inspecting a CAT 797F mining haul truck." if session["mode"] == "797" else "You are a visual copilot."
             result = await asyncio.wait_for(
                 asyncio.to_thread(qwen_ref.voice_answer.remote, audio_bytes, frame_b64, context),
                 timeout=30,
@@ -1278,7 +1275,7 @@ def web():
             })
             return
         try:
-            context = "You are inspecting a CAT 797F mining haul truck." if session["mode"] == "cat" else "You are a visual copilot."
+            context = "You are inspecting a CAT 797F mining haul truck." if session["mode"] == "797" else "You are a visual copilot."
             prompt = (
                 f'{context} The operator asks: "{question}"\n'
                 "Answer based on what you see in the image. "

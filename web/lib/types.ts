@@ -11,7 +11,7 @@ export interface DetectionMessage {
   detections: Detection[];
   coverage: number;
   total_zones: number;
-  mode: "general" | "cat";
+  mode: "general" | "797";
   yolo_ms: number;
   frame_id: number;
   client_ts: number;
@@ -32,7 +32,7 @@ export interface AnalysisMessage {
   type: "analysis";
   data: AnalysisData;
   triggered_by: "cadence" | "manual_request" | "tier2_flag";
-  mode: "general" | "cat";
+  mode: "general" | "797";
   frame_id: number;
   client_ts: number;
   server_ts: number;
@@ -54,7 +54,7 @@ export interface FindingMessage {
 export interface VoiceAnswerMessage {
   type: "voice_answer";
   text: string;
-  mode: "general" | "cat";
+  mode: "general" | "797";
 }
 
 export interface ZoneFirstSeenMessage {

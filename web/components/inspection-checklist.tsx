@@ -14,7 +14,7 @@ function formatName(s: string): string {
 }
 
 export function InspectionChecklist({ componentsSeen, coverage, equipmentInfo, mode }: Props) {
-  const isCatMode = mode === "cat";
+  const isCatMode = mode === "797";
 
   const expected = isCatMode ? (equipmentInfo?.inspectable_zones ?? []) : [];
   const allNames = expected.length > 0 ? expected : [...componentsSeen];

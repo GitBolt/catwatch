@@ -126,7 +126,7 @@ export async function generateInspectionPDF(data: InspectionPDFData): Promise<js
   const overallCode = poorCount > 0 ? "Poor" : fairCount > 0 ? "Fair" : "Good";
   const reportData = data.report?.data as Record<string, unknown> | undefined;
 
-  const equipModel = data.mode === "cat"
+  const equipModel = data.mode === "797"
     ? "CAT 797F"
     : (data.unitModel || (reportData?.unit as Record<string, unknown>)?.model || "General Equipment") as string;
 

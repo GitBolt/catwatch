@@ -49,7 +49,7 @@ def _parse_args():
     parser.add_argument("--hours",            type=int,   default=2847)
     parser.add_argument("--technician",       default="Inspector")
     parser.add_argument("--camera",           type=int,   default=CAMERA_DEVICE)
-    parser.add_argument("--mode",             choices=["general", "cat"], default="general")
+    parser.add_argument("--mode",             choices=["general", "797"], default="general")
     parser.add_argument("--frame-interval",   type=float, default=FRAME_INTERVAL)
     parser.add_argument("--force-send-ms",    type=int,   default=FORCE_SEND_MS)
     parser.add_argument("--motion-threshold", type=float, default=MOTION_THRESHOLD)
@@ -234,10 +234,10 @@ def _handle_keyboard(key, session, voice, unit_info, frame, coverage_pct):
             shared["pending_actions"].append(("set_mode", {"type": "set_mode", "mode": "general"}))
         speak("General mode.")
     elif key == ord("c"):
-        shared["inspection_mode"] = "cat"
+        shared["inspection_mode"] = "797"
         with shared_lock:
-            shared["pending_actions"].append(("set_mode", {"type": "set_mode", "mode": "cat"}))
-        speak("CAT mode.")
+            shared["pending_actions"].append(("set_mode", {"type": "set_mode", "mode": "797"}))
+        speak("797 mode.")
     elif key == ord("e"):
         fname = session.save_evidence(frame, "manual")
         print(f"  [evidence: {fname}]")
