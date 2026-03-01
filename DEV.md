@@ -24,6 +24,14 @@ Internal reference for deploying, updating, and testing the platform.
                                               └─────────────────────────┘
 ```
 
+### Environment Architecture Cheat Sheet
+
+- **SDK (`catwatch.CatWatch`)** sends a `POST /api/sessions` to the **Web App** (using the Modal URL configured in `defaults.py` or overridden at runtime).
+- **Web App** creates the session in PostgreSQL and returns the Modal WebSocket ingest URL.
+- **SDK** opens a WebSocket connection to `wss://catwatch-hackillinois.vercel.app/ws/ingest/{id}` on the **Modal Backend**.
+- **Modal Backend** streams frames, runs YOLO + Qwen, and writes Findings / Reports directly to **PostgreSQL** using the `catwatch-db` secret.
+- **Dashboard Viewers** open a WebSocket connection to `wss://catwatch-hackillinois.vercel.app/ws/view/{id}` on the **Modal Backend** to watch the inspection live.
+
 **GPU gating:** YOLO/Qwen only run when at least one viewer is connected to the
 dashboard. SDK streams frames immediately but no GPU cost until an operator opens
 the session URL.
@@ -121,11 +129,19 @@ poetry install
 
 ### Modal secrets
 
-The backend reads secrets at runtime from Modal, not from `.env` files.
+The backend reads secrets at runtime from Modal, not from `.env` files. You must create a `catwatch-db` secret containing `DATABASE_URL` and `DASHBOARD_URL`.
 
+**Via Modal Dashboard UI (Recommended):**
+1. Navigate to your Modal Dashboard → Secrets → Create New Secret.
+2. Choose **Custom**.
+3. Name it exactly: `catwatch-db`
+4. Add the Key-Value pairs for `DATABASE_URL` and `DASHBOARD_URL`.
+5. Click **Deploy Secret**.
+
+**Via CLI:**
 ```bash
 # Create (one-time)
-modal secret create catwatch-db DATABASE_URL=postgresql://user:pass@host:5432/db DASHBOARD_URL=https://catwatch.vercel.app
+modal secret create catwatch-db DATABASE_URL=postgresql://user:pass@host:5432/db DASHBOARD_URL=https://catwatch-hackillinois.vercel.app
 
 # Update
 modal secret create --force catwatch-db DATABASE_URL=postgresql://... DASHBOARD_URL=https://...

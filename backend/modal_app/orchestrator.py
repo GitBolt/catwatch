@@ -617,7 +617,8 @@ def web():
                 if session["pending_frame"]:
                     pf = session["pending_frame"]
                     session["pending_frame"] = None
-                    asyncio.create_task(process_yolo_session(pf[0], pf[1], pf[2]))
+                    pf_b64 = base64.b64encode(pf[0]).decode("ascii")
+                    asyncio.create_task(process_yolo_session(pf_b64, pf[1], pf[2]))
 
         _MODE_MAP = {0: "general", 1: "cat"}
 
@@ -640,21 +641,21 @@ def web():
                     if incoming_mode in ("general", "cat"):
                         session["mode"] = incoming_mode
 
-                    frame_b64 = base64.b64encode(jpeg_bytes).decode("ascii")
-                    session["latest_frame_b64"] = frame_b64
+                    session["latest_frame_b64"] = base64.b64encode(jpeg_bytes).decode("ascii")
                     session["latest_frame_id"] = frame_id
                     session["latest_frame_client_ts"] = frame_client_ts
 
                     viewer_payload = struct.pack("!I", frame_id) + jpeg_bytes
-                    await _broadcast_bytes(session, viewer_payload)
+                    asyncio.create_task(_broadcast_bytes(session, viewer_payload))
 
                     if not session["viewer_wss"]:
                         continue
 
                     if session["yolo_busy"]:
-                        session["pending_frame"] = (frame_b64, frame_id, frame_client_ts)
+                        session["pending_frame"] = (jpeg_bytes, frame_id, frame_client_ts)
                     else:
                         session["pending_frame"] = None
+                        frame_b64 = base64.b64encode(jpeg_bytes).decode("ascii")
                         asyncio.create_task(process_yolo_session(frame_b64, frame_id, frame_client_ts))
 
                     continue
