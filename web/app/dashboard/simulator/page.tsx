@@ -23,7 +23,7 @@ export default function SimulatorPage() {
   useEffect(() => { setMounted(true); }, []);
 
   return (
-    <div className="simulator-page" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>
           Damage Simulator

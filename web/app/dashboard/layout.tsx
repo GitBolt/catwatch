@@ -43,7 +43,7 @@ export default function DashboardLayout({
           </Link>
         </div>
       </nav>
-      <main className="container" style={{ paddingTop: 32, paddingBottom: 48, flex: 1 }}>
+      <main style={{ paddingTop: 32, paddingBottom: 48, flex: 1, width: "100%", maxWidth: 1400, marginLeft: "auto", marginRight: "auto", paddingLeft: 16, paddingRight: 16, boxSizing: "border-box" }}>
         {children}
       </main>
       <footer className="site-footer">

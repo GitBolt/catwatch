@@ -56,7 +56,7 @@ export default async function DashboardPage() {
     : "—";
 
   return (
-    <div className="dashboard-overview" style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
       <div>
         <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>
           Dashboard
