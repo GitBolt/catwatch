@@ -71,110 +71,33 @@ cw.run()`;
         </p>
       </div>
 
-      {/* How it works card */}
+      {/* SDK docs link */}
       <div
         className="card"
-        style={{ padding: 20, borderColor: "var(--border-hover)" }}
+        style={{ padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", borderColor: "var(--border-hover)" }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: 12,
-          }}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--amber)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="16" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12.01" y2="8" />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
           </svg>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--amber)" }}>
-            How API keys work
+          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+            Create a key below, then pass it to{" "}
+            <code className="mono" style={{ fontSize: 12, padding: "1px 4px", borderRadius: 3, background: "var(--bg)", border: "1px solid var(--border)" }}>
+              CatWatch(api_key=&quot;...&quot;)
+            </code>{" "}
+            in the SDK.
           </span>
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
-            gap: 16,
-          }}
+        <a
+          href="https://github.com/GitBolt/catwatch/blob/main/sdk/README.md"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn btn-secondary btn-small"
+          style={{ flexShrink: 0 }}
         >
-          <div>
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: "var(--text-dim)",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                marginBottom: 4,
-              }}
-            >
-              1. Create a key
-            </div>
-            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-              Give it a name to identify which device or project it belongs to.
-            </div>
-          </div>
-          <div>
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: "var(--text-dim)",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                marginBottom: 4,
-              }}
-            >
-              2. Use in SDK
-            </div>
-            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-              Pass the key to{" "}
-              <code
-                className="mono"
-                style={{
-                  fontSize: 12,
-                  padding: "1px 4px",
-                  borderRadius: 3,
-                  background: "var(--bg)",
-                  border: "1px solid var(--border)",
-                }}
-              >
-                CatWatch(api_key=&quot;...&quot;)
-              </code>{" "}
-              in your Python script.
-            </div>
-          </div>
-          <div>
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: "var(--text-dim)",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                marginBottom: 4,
-              }}
-            >
-              3. View results
-            </div>
-            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-              Inspection sessions and findings will appear automatically in the
-              dashboard.
-            </div>
-          </div>
-        </div>
+          SDK Docs
+        </a>
       </div>
 
       {/* Create key form */}
@@ -312,85 +235,6 @@ cw.run()`;
         )}
       </div>
 
-      {/* SDK quick-reference */}
-      <div className="card" style={{ padding: 20 }}>
-        <h3
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: "var(--text-muted)",
-            marginBottom: 10,
-          }}
-        >
-          SDK Quick Reference
-        </h3>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div>
-            <span
-              style={{
-                fontSize: 12,
-                color: "var(--text-dim)",
-                fontWeight: 500,
-              }}
-            >
-              Install
-            </span>
-            <pre
-              className="mono"
-              style={{
-                marginTop: 4,
-                fontSize: 12,
-                color: "var(--text-muted)",
-                background: "var(--bg)",
-                padding: "6px 10px",
-                borderRadius: "var(--radius)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              pip install catwatch
-            </pre>
-          </div>
-          <div>
-            <span
-              style={{
-                fontSize: 12,
-                color: "var(--text-dim)",
-                fontWeight: 500,
-              }}
-            >
-              Connect &amp; run
-            </span>
-            <pre
-              className="mono"
-              style={{
-                marginTop: 4,
-                fontSize: 12,
-                color: "var(--text-muted)",
-                background: "var(--bg)",
-                padding: "6px 10px",
-                borderRadius: "var(--radius)",
-                border: "1px solid var(--border)",
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {`from catwatch import CatWatch
-
-cw = CatWatch(api_key="cw_live_YOUR_KEY")
-cw.connect(source=0)  # 0 = webcam, RTSP url, or picamera2
-
-@cw.on_detection
-def on_det(msg):
-    print(f"{len(msg['detections'])} detections")
-
-@cw.on_analysis
-def on_analysis(msg):
-    print(f"[{msg['data']['severity']}] {msg['data']['description']}")
-
-cw.run()`}
-            </pre>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

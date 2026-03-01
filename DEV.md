@@ -1,264 +1,152 @@
 # CatWatch — Developer Guide
 
-Internal reference for deploying, updating, and testing the platform.
+Internal reference for deploying, developing, and testing the platform.
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────┐     POST /api/sessions      ┌─────────────────────────┐
-│  SDK (Python) │ ──────────────────────────▶ │  Modal Backend (GPU)     │
-│  pip install   │     WS /ws/ingest/{id}      │  YOLO (T4) + Qwen (A100)│
-│  catwatch      │ ◀════════════════════════▶ │  FastAPI orchestrator    │
-└──────────────┘                              └────────────┬────────────┘
-                                                           │ WS /ws/view/{id}
-┌──────────────┐                              ┌────────────▼────────────┐
-│  Supermemory  │ ◀──── /api/memory ────────  │  Next.js Dashboard      │
-│  (memory API) │                              │  Vercel                  │
-└──────────────┘                              └─────────────────────────┘
-                                                           │
-                                              ┌────────────▼────────────┐
-                                              │  PostgreSQL (Railway)    │
-                                              │  Prisma ORM              │
-                                              └─────────────────────────┘
+SDK (Python)  ──POST /api/sessions──▶  Modal Backend (GPU)
+              ◀══WS /ws/ingest/{id}══▶  YOLO (T4) + Qwen2-VL (A100)
+                                        FastAPI orchestrator
+                                              │
+Dashboard (Next.js, Vercel)  ◀══WS /ws/view/{id}══╯
+       │
+       ├── /api/memory ──▶ Supermemory (inspection knowledge base)
+       └── Prisma ORM ──▶ PostgreSQL (Railway)
 ```
 
-### Environment Architecture Cheat Sheet
-
-- **SDK (`catwatch.CatWatch`)** sends a `POST /api/sessions` to the **Web App** (using the Modal URL configured in `defaults.py` or overridden at runtime).
-- **Web App** creates the session in PostgreSQL and returns the Modal WebSocket ingest URL.
-- **SDK** opens a WebSocket connection to `wss://catwatch-hackillinois.vercel.app/ws/ingest/{id}` on the **Modal Backend**.
-- **Modal Backend** streams frames, runs YOLO + Qwen, and writes Findings / Reports directly to **PostgreSQL** using the `catwatch-db` secret.
-- **Dashboard Viewers** open a WebSocket connection to `wss://catwatch-hackillinois.vercel.app/ws/view/{id}` on the **Modal Backend** to watch the inspection live.
-
-**GPU gating:** YOLO/Qwen only run when at least one viewer is connected to the
-dashboard. SDK streams frames immediately but no GPU cost until an operator opens
-the session URL.
+Key behaviors:
+- GPU inference only runs when at least one dashboard viewer is connected
+- Only one session per user at a time — creating a new session auto-closes any existing one
+- CAT mode uses a fine-tuned YOLO model, general mode uses vanilla YOLOv8
+- The VLM auto-identifies equipment type and builds a dynamic zone checklist (CAT mode only)
 
 ---
 
 ## Repo Structure
 
-```
-catwatch/
-├── sdk/                        # Python SDK (Poetry package)
-│   ├── catwatch/
-│   │   ├── client.py           # CatWatch class — connect, run, callbacks
-│   │   ├── protocol.py         # WebSocket client with auth + reconnect
-│   │   ├── source.py           # Video source abstraction (cam, RTSP, picamera2)
-│   │   ├── quality.py          # Blur + motion scoring
-│   │   └── defaults.py         # Default server URL, frame intervals
-│   └── pyproject.toml          # Poetry config
-├── backend/
-│   ├── modal_app/
-│   │   ├── __init__.py         # Modal app + image definitions
-│   │   ├── orchestrator.py     # FastAPI: REST + WebSocket endpoints
-│   │   ├── yolo_detector.py    # YOLO inference (T4 GPU)
-│   │   ├── qwen_vl.py          # Qwen2-VL inference (A100 GPU)
-│   │   └── db.py               # asyncpg helpers (sessions, findings, reports)
-│   ├── prompts.py              # VLM prompts, zone inspection criteria
-│   └── zone_config.py          # Zone mapping (YOLO label → inspection zone)
-├── web/                        # Next.js 15 dashboard
-│   ├── app/
-│   │   ├── dashboard/          # Auth-protected pages (inspections, keys)
-│   │   ├── session/[id]/       # Live inspection viewer
-│   │   └── api/                # API routes (auth, keys, memory)
-│   ├── hooks/
-│   │   └── use-session-socket.ts  # WebSocket hook (+ Supermemory integration)
-│   ├── components/             # UI components
-│   ├── lib/
-│   │   ├── supermemory.ts      # Supermemory API client
-│   │   ├── auth.ts             # Magic Link auth
-│   │   ├── db.ts               # Prisma client singleton
-│   │   ├── types.ts            # WebSocket message types
-│   │   └── constants.ts        # Zones, severity colors
-│   └── prisma/schema.prisma    # Database schema
-├── data/                       # Spec KB, sub-section prompts, CATrack data
-├── GUIDE.md                    # Consumer SDK guide
-└── DEV.md                      # This file
-```
+- `sdk/catwatch/` — Python SDK (connect, stream, callbacks). Key files: `client.py`, `protocol.py`, `source.py`, `defaults.py`
+- `backend/modal_app/` — Modal GPU backend. `orchestrator.py` (FastAPI + WebSocket + insights engine), `yolo_detector.py` (dual YOLO), `qwen_vl.py` (Qwen2-VL + Whisper), `db.py` (asyncpg helpers)
+- `backend/prompts.py` — VLM prompts and zone criteria
+- `web/` — Next.js 15 dashboard. `app/dashboard/` for auth-protected pages, `app/session/[id]/` for the live viewer, `hooks/use-session-socket.ts` for the WebSocket + Supermemory hook, `components/` for UI, `lib/` for types, auth, PDF gen, Supermemory client
 
 ---
 
 ## Prerequisites
 
-| Tool | Install | Version check |
-|------|---------|--------------|
-| Python 3.11+ | `brew install python` | `python3 --version` |
-| Node 18+ | `brew install node` | `node --version` |
-| Poetry | `pip install poetry` | `poetry --version` |
-| Modal CLI | `pip install modal` | `modal --version` |
-| Vercel CLI | `npm i -g vercel` | `vercel --version` |
-
-**Important:** Do NOT use the system Python 3.9 from CommandLineTools. Modal's
-async internals break on 3.9. Always use Homebrew Python (`/opt/homebrew/bin/python3`).
+You need Python 3.11+, Node 18+, Modal CLI (`pip install modal`), and optionally Vercel CLI. Do NOT use macOS system Python 3.9 — Modal breaks on it.
 
 ---
 
 ## Environment Setup
 
-### 1. Root venv (for Modal CLI + backend deploys)
+### Backend (Modal)
 
 ```bash
 cd ~/Projects/catwatch
-python3 -m venv env
-source env/bin/activate
+python3 -m venv env && source env/bin/activate
 pip install modal
 ```
 
-### 2. Web dashboard
+Create the Modal secret (one-time):
+
+```bash
+modal secret create catwatch-db \
+  DATABASE_URL=postgresql://user:pass@host:5432/db \
+  DASHBOARD_URL=https://catwatch-hackillinois.vercel.app
+```
+
+### Dashboard (Next.js)
 
 ```bash
 cd web
-npm install
+yarn install
 cp .env.example .env.local
-# Fill in: DATABASE_URL, MAGIC_SECRET_KEY, NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY, SUPERMEMORY_API_KEY
 ```
 
-### 3. SDK local dev
+Fill in `.env.local`: `DATABASE_URL`, `MAGIC_SECRET_KEY`, `NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY`, `SUPERMEMORY_API_KEY`.
+
+### SDK (local dev)
 
 ```bash
-cd sdk
-poetry install
+cd sdk && poetry install
 ```
 
----
-
-## Secrets & Environment Variables
-
-### Modal secrets
-
-The backend reads secrets at runtime from Modal, not from `.env` files. You must create a `catwatch-db` secret containing `DATABASE_URL` and `DASHBOARD_URL`.
-
-**Via Modal Dashboard UI (Recommended):**
-1. Navigate to your Modal Dashboard → Secrets → Create New Secret.
-2. Choose **Custom**.
-3. Name it exactly: `catwatch-db`
-4. Add the Key-Value pairs for `DATABASE_URL` and `DASHBOARD_URL`.
-5. Click **Deploy Secret**.
-
-**Via CLI:**
-```bash
-# Create (one-time)
-modal secret create catwatch-db DATABASE_URL=postgresql://user:pass@host:5432/db DASHBOARD_URL=https://catwatch-hackillinois.vercel.app
-
-# Update
-modal secret create --force catwatch-db DATABASE_URL=postgresql://... DASHBOARD_URL=https://...
-```
-
-### Vercel env vars
-
-Set in Vercel dashboard (Settings > Environment Variables) or `.env.local` for local dev:
-
-| Variable | Required | Example |
-|----------|----------|---------|
-| `DATABASE_URL` | Yes | `postgresql://user:pass@host:5432/railway` |
-| `MAGIC_SECRET_KEY` | Yes | `sk_live_...` |
-| `NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY` | Yes | `pk_live_...` |
-| `SUPERMEMORY_API_KEY` | Yes | `sm_...` |
-| `NEXT_PUBLIC_BACKEND_WS` | No | `wss://heyaabis--dronecat-web.modal.run` (default) |
-
-**Note:** `NEXT_PUBLIC_*` vars are baked in at build time. After changing them,
-you must redeploy (`vercel --prod`).
+Or install editable from anywhere: `pip install -e ~/Projects/catwatch/sdk`
 
 ---
 
 ## Deploying
 
-### Backend (Modal)
+### Backend
 
 ```bash
 source env/bin/activate
 modal deploy -m backend.modal_app.orchestrator
 ```
 
-This deploys the FastAPI orchestrator + YOLO + Qwen functions. Output shows the URL:
+Verify: `curl https://heyaabis--dronecat-web.modal.run/health`
 
-```
-✓ Created web function web => https://heyaabis--dronecat-web.modal.run
-```
-
-**Verify:**
-
-```bash
-curl https://heyaabis--dronecat-web.modal.run/health
-# → {"status":"ok","service":"dronecat","sessions":0}
-```
-
-**Common issues:**
-
-| Error | Fix |
-|-------|-----|
-| `Secret 'catwatch-db' not found` | `modal secret create catwatch-db DATABASE_URL=... DASHBOARD_URL=...` |
-| `No module named 'backend/modal_app'` | Use `-m` flag: `modal deploy -m backend.modal_app.orchestrator` |
-| `CancelledError` spam | You're on Python 3.9. Recreate venv with `python3` (3.11+) |
-| `Created objects` but no functions | You deployed `__init__.py` not the orchestrator. Use `backend.modal_app.orchestrator` |
-
-### Database (Prisma)
+### Database
 
 After changing `web/prisma/schema.prisma`:
 
 ```bash
 cd web
-npx prisma db push      # applies schema changes to Railway
-npx prisma generate     # regenerates TypeScript types
+npx prisma db push
+npx prisma generate
 ```
 
-### Frontend (Vercel)
+If the backend uses new columns, also update the raw SQL in `backend/modal_app/db.py`.
+
+### Frontend
 
 ```bash
-cd web
-vercel --prod
+cd web && vercel --prod
 ```
 
-Or push to the connected git branch for auto-deploy.
+Or push to the connected git branch.
 
 ### SDK (PyPI)
 
-After changing SDK code:
-
 ```bash
 cd sdk
-
-# Bump version
-poetry version patch    # 0.1.0 → 0.1.1
-# or: poetry version minor  (0.1.0 → 0.2.0)
-# or: poetry version major  (0.1.0 → 1.0.0)
-
-# Build
-poetry build
-
-# Publish (first time: poetry config pypi-token.pypi pypi-YOUR_TOKEN)
-poetry publish
+poetry version patch
+poetry build && poetry publish
 ```
 
-Get a PyPI API token at https://pypi.org/manage/account/token/
+---
 
-For local testing without publishing, install editable from anywhere:
+## Key Backend Concepts
 
-```bash
-pip install -e ~/Projects/catwatch/sdk
-```
+**Session lifecycle**: SDK calls `POST /api/sessions` → backend closes any existing active sessions for this user → creates new session → returns WebSocket URLs. When the SDK disconnects or the operator clicks End, the session is marked completed.
+
+**Dual YOLO**: `yolo_detector.py` loads both `yolov8n.pt` (general) and `dronecat_yolo_best.pt` (fine-tuned CAT). The `detect(frame, mode)` method picks the right model per call.
+
+**Equipment auto-identification**: On the first frame with YOLO detections (CAT mode), `qwen_vl.identify_equipment()` runs once to determine equipment type, model, and inspectable zones. This replaces the old hardcoded checklist.
+
+**Multi-signal correlation**: After each VLM analysis, `_correlate_signals()` checks if YOLO detection labels match VLM finding keywords (e.g. "hydraulic_hose" + "fluid stain" = `hydraulic_leak` insight). Pure in-memory, no GPU cost.
+
+**Analysis history + severity drift**: Each VLM analysis is stored per-zone (up to 10). `_compute_zone_trend()` derives severity counts, average confidence, and drift direction (worsening/improving/stable/inconsistent).
+
+**Supermemory integration**: Findings are stored automatically via `/api/memory` using `unit_serial`, `location`, or browser geolocation as the container tag. On session start, the unit/site profile is fetched and injected into the VLM persona prompt.
 
 ---
 
 ## Local Development
 
-### Run dashboard locally
+### Dashboard
 
 ```bash
-cd web
-npm run dev    # http://localhost:3000
+cd web && yarn dev
 ```
 
 ### Test SDK against production backend
 
 ```bash
-cd ~/some-test-dir
-python3 -m venv env && source env/bin/activate
 pip install -e ~/Projects/catwatch/sdk
-
 python3 -c "
 from catwatch import CatWatch
 cw = CatWatch(api_key='YOUR_KEY')
@@ -267,97 +155,30 @@ cw.run()
 "
 ```
 
-### Test SDK against local backend (rare)
-
-Modal functions run remotely even during dev. For full local testing, use
-`modal serve -m backend.modal_app.orchestrator` which creates a temporary deployment.
-
----
-
-## E2E Testing: Supermemory Integration
-
-### First inspection (builds memory)
-
-```python
-from catwatch import CatWatch
-
-cw = CatWatch(api_key="YOUR_KEY")
-cw.connect(source=0, mode="cat", unit_serial="TEST001", fleet_tag="fleet_alpha")
-cw.run()
-# Open dashboard URL → Unit Memory panel shows "No prior history"
-# Point webcam at CAT equipment → findings flow
-# Ctrl+C to stop
-```
-
-### Verify storage
+### Test with temporary Modal deployment
 
 ```bash
-curl -s "https://catwatch.vercel.app/api/memory?action=profile&unitSerial=TEST001" | python3 -m json.tool
+modal serve -m backend.modal_app.orchestrator
 ```
-
-### Second inspection (memory kicks in)
-
-Run the same script again. Unit Memory panel now shows prior findings.
-VLM analysis references past context in its assessments.
-
-### Fleet intelligence
-
-Run a second unit (`unit_serial="TEST002"`, same `fleet_tag`). Then view either
-inspection in Dashboard > Inspections — "Similar Findings Across Fleet" section
-shows semantically matched cross-unit findings.
-
-### Verification checklist
-
-| # | Check | How to verify |
-|---|-------|--------------|
-| 1 | Backend health | `curl .../health` → `{"status":"ok"}` |
-| 2 | SDK connects | Console prints session_id + dashboard_url |
-| 3 | GPU gating | No YOLO/analysis until dashboard is opened |
-| 4 | `viewer_joined` | Console prints "Operator connected" when dashboard opens |
-| 5 | Detections flow | `[YOLO] N detections` in console |
-| 6 | VLM analysis | `[VLM] [GREEN/YELLOW/RED]` in console |
-| 7 | Unit Memory panel | Shows serial, model, fleet in dashboard sidebar |
-| 8 | Supermemory stores | Profile endpoint returns findings after inspection |
-| 9 | Memory recall | Second inspection shows prior history + VLM uses context |
-| 10 | Fleet search | Inspection detail shows cross-unit similar findings |
 
 ---
 
 ## Updating the Backend URL
 
-The Modal URL contains your workspace name. If it changes, update in **three places**:
-
+If the Modal URL changes, update in three places:
 1. `sdk/catwatch/defaults.py` → `DEFAULT_SERVER`
 2. `web/hooks/use-session-socket.ts` → `BACKEND_WS` fallback
 3. Vercel env var → `NEXT_PUBLIC_BACKEND_WS` (then redeploy)
-
-Current URL: `https://heyaabis--dronecat-web.modal.run`
-
----
-
-## Database Schema Changes
-
-1. Edit `web/prisma/schema.prisma`
-2. `cd web && npx prisma db push` (applies to Railway)
-3. `npx prisma generate` (updates TypeScript types)
-4. If backend uses the new columns: update `backend/modal_app/db.py` SQL queries
-5. Redeploy backend: `modal deploy -m backend.modal_app.orchestrator`
-
-The backend uses raw SQL via asyncpg (not Prisma) — column names must match
-the Prisma schema exactly (camelCase with quotes: `"unitSerial"`).
 
 ---
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---------|-----|
-| 404 on `/api/sessions` | Backend not deployed. `modal deploy -m backend.modal_app.orchestrator` |
-| 401 on connect | Invalid API key. Create one in Dashboard > API Keys |
-| 500 on connect | DB schema mismatch. Run `cd web && npx prisma db push` |
-| Dashboard WS fails | Wrong `NEXT_PUBLIC_BACKEND_WS`. Update in Vercel + redeploy |
-| No VLM analysis | No viewers connected (GPU gating). Open the dashboard URL first |
-| Python 3.9 errors | Recreate venv: `python3 -m venv env` (use Homebrew Python 3.11+) |
-| `Secret not found` | `modal secret create catwatch-db DATABASE_URL=... DASHBOARD_URL=...` |
-| Supermemory empty | Check `SUPERMEMORY_API_KEY` in Vercel. Dashboard must be open during inspection |
-| SDK changes not picked up | `pip install -e ./sdk` for editable install, or bump + `poetry publish` |
+- **404 on `/api/sessions`** — backend not deployed. Run `modal deploy -m backend.modal_app.orchestrator`
+- **401 on connect** — invalid API key
+- **500 on connect** — DB schema mismatch. Run `npx prisma db push`
+- **No VLM analysis** — no dashboard viewer connected (GPU gating), or YOLO hasn't detected anything yet
+- **Python 3.9 errors** — recreate venv with Homebrew Python 3.11+
+- **`Secret not found`** — `modal secret create catwatch-db DATABASE_URL=... DASHBOARD_URL=...`
+- **Supermemory empty** — check `SUPERMEMORY_API_KEY` in `.env.local`. Also check browser console for `[memory] store error:` warnings
+- **Multiple active sessions** — should no longer happen. `create_session` auto-closes previous sessions. If stale DB rows exist, they'll be cleaned up on next session creation.
