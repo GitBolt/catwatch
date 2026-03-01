@@ -180,6 +180,22 @@ def build_zone_inspection_prompt(zone_id, mode="cat", equipment_info=None):
     - Uses equipment_info (from auto-ID) to contextualize the inspection.
     - Falls back to generic personas when zone is unknown or mode is "general".
     """
+    if mode == "797":
+        criteria = _797_ZONE_CRITERIA.get(zone_id)
+        if criteria:
+            zone_block = (
+                f"ZONE FOCUS: {zone_id} — {criteria['focus']}\n"
+                f"RED: {criteria['red']}\n"
+                f"YELLOW: {criteria['yellow']}\n"
+                f"GREEN: {criteria['green']}\n"
+                "False positives to avoid: dirt/debris obscuring condition, "
+                "lighting shadows, normal operational clearances."
+            )
+            persona = f"{CAT_797_INSPECTION_PERSONA}\n\n--- Inspection Criteria ---\n{zone_block}"
+        else:
+            persona = CAT_797_INSPECTION_PERSONA
+        return persona, CAT_797_OUTPUT_SCHEMA
+
     if mode != "cat":
         return GENERAL_SCENE_PERSONA, GENERAL_OUTPUT_SCHEMA
 
@@ -339,6 +355,77 @@ GREEN: Component within normal parameters. No visible defects. Action: log for b
 YELLOW: Early-stage wear, minor leakage, or cosmetic damage that may progress. Action: schedule at next PM.
 RED: Active failure, major structural damage, safety hazard, or fluid leak under pressure. Action: immediate attention.\
 """
+
+# ── CAT 797 haul truck prompts ────────────────────────────────────────────────
+
+CAT_797_INSPECTION_PERSONA = """\
+You are a pre-shift inspector on a CAT 797 haul truck. Your job is to identify \
+leaks, damage, wear, and anything that would ground the unit before shift start. \
+Use the language of a real field inspector: concise, specific, actionable. \
+If no haul truck is visible, describe the scene honestly and set severity GREEN. \
+Never fabricate equipment that is not in the image.\
+"""
+
+_797_ZONE_CRITERIA = {
+    "undercarriage": {
+        "focus": "Tires, wheels, duo-cone seals, rock ejectors",
+        "red": "Flat tire, visible tire damage, active seal leak, rock ejector stuck",
+        "yellow": "Uneven wear, low inflation signs, minor seal seepage, debris buildup",
+        "green": "Tires properly inflated, seals dry, rock ejectors move freely",
+    },
+    "engine": {
+        "focus": "Engine area, radiator, hoses, belts",
+        "red": "Active oil/coolant leak, belt failure, radiator fins severely blocked, structural damage",
+        "yellow": "Minor seepage, hose wear or cracking, radiator debris accumulation, belt wear",
+        "green": "No leaks, hoses and belts in good condition, radiator clear",
+    },
+    "fluids": {
+        "focus": "Fuel filters, water separator, oil levels, coolant, all hoses",
+        "red": "Active fuel leak, water separator full, hose rupture, critical fluid low",
+        "yellow": "Water in separator, hose cracking or wear marks, fluid at minimum",
+        "green": "Fluid levels acceptable, filters clear, hoses intact and dry",
+    },
+    "hydraulics": {
+        "focus": "Front suspension cylinders, lifting device cylinders, steering oil",
+        "red": "Active hydraulic leak, cylinder height abnormal, steering fluid critically low",
+        "yellow": "Minor seepage at cylinder seals, fluid at lower range, surface corrosion",
+        "green": "Cylinders at correct height, seals dry, fluid levels normal",
+    },
+    "drivetrain": {
+        "focus": "Differentials, brakes, transmission, torque converter",
+        "red": "Active transmission or brake fluid leak, torque converter damage, unusual noise indicator",
+        "yellow": "Minor seepage, fluid at lower range, visible wear on accessible components",
+        "green": "No leaks, fluid levels normal, components visually intact",
+    },
+    "electrical": {
+        "focus": "Front and rear lights, horn, reverse alarm, battery, wipers",
+        "red": "Inoperable safety lights, missing reverse alarm, battery damage or acid leak",
+        "yellow": "Damaged lens, wiper wear, loose cable, battery terminal corrosion",
+        "green": "All lights operable, alarm functional, battery clean and secure",
+    },
+    "cab": {
+        "focus": "Windshield, windows, ROPS, seat belt, mirrors, air filters",
+        "red": "Broken windshield or windows, ROPS damage or loose bolts, seat belt failure",
+        "yellow": "Minor glass crack, mirror damage, dirty air filter, wiper streak",
+        "green": "Glass intact, ROPS secure, seat belt functional, mirrors adjusted",
+    },
+    "structures": {
+        "focus": "Truck box, chassis, frame, steps, handrails, support blocks",
+        "red": "Structural crack or fracture, missing support blocks, broken steps or handrails",
+        "yellow": "Minor dents, wear on steps, loose handrail, surface corrosion",
+        "green": "Truck box and chassis intact, steps and handrails clean and secure",
+    },
+}
+
+CAT_797_OUTPUT_SCHEMA = """
+Analyze this frame. Respond in valid JSON with these exact keys:
+- description: what you see in 1-2 sentences (be specific and honest)
+- severity: GREEN / YELLOW / RED
+- findings: array of specific observations (max 3), empty if nothing notable
+- callout: the single most notable thing in 4-5 words (spoken aloud). If nothing changed, use "Scene normal"
+- confidence: 0.0 to 1.0
+- zone: inspection zone if equipment visible (undercarriage, engine, fluids, hydraulics, drivetrain, electrical, cab, structures) or null"""
+
 
 REPORT_PROMPT = """\
 You are generating a final inspection report aligned with Caterpillar inspection standards.
