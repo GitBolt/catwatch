@@ -1,11 +1,11 @@
 # CatWatch
 
-AI-powered equipment inspection platform. Stream video from any camera to cloud AI, get real-time object detection and visual analysis on a live dashboard.
+AI-powered equipment inspection platform. Stream video from any camera to cloud AI, get real-time visual analysis on a live dashboard with full inspection reports and fleet memory.
 
-The SDK connects a camera (webcam, drone, Raspberry Pi, RTSP) to a GPU backend running YOLO + Qwen2-VL on Modal. An operator watches the live feed on a web dashboard with bounding boxes, AI analysis, voice Q&A, and inspection reports.
+The SDK connects a camera (webcam, drone, Raspberry Pi, RTSP) to a GPU backend running Qwen2-VL on Modal. An operator watches the live feed on a web dashboard with AI analysis, zone tracking, voice Q&A, and a generated PDF report.
 
 ```
-Camera (SDK)  --WebSocket-->  Modal Backend (YOLO + Qwen VLM)  --WebSocket-->  Dashboard
+Camera (SDK)  --WebSocket-->  Modal Backend (Qwen2-VL)  --WebSocket-->  Dashboard
 ```
 
 ---
@@ -37,9 +37,9 @@ Open the printed dashboard URL in a browser to see the live inspection.
 
 ## Modes
 
-**`"general"`** — general safety and scene monitoring. Uses vanilla YOLOv8.
+**`"general"`** — general safety and scene monitoring. The VLM flags hazards, unsafe conditions, and person-related risks.
 
-**`"cat"`** — CAT equipment inspection with a fine-tuned YOLO model and CATrack criteria. The VLM auto-identifies the equipment type and builds a dynamic zone checklist.
+**`"797"`** — CAT 797F defect inspection. The VLM inspects for mechanical defects, wear, leaks, and structural damage specific to the Caterpillar 797F mining truck. It auto-identifies equipment type and builds a dynamic zone checklist. Reports "No 797F visible" only when the truck is genuinely absent from frame.
 
 Only one inspection runs at a time per user. Starting a new session automatically closes any previous one.
 
@@ -78,11 +78,6 @@ On later inspections of the same unit or site, the dashboard shows prior finding
 Register before calling `cw.run()`:
 
 ```python
-@cw.on_detection
-def handle_detection(msg):
-    for det in msg["detections"]:
-        print(f"  {det['label']} ({det['confidence']:.0%})")
-
 @cw.on_analysis
 def handle_analysis(msg):
     data = msg["data"]
@@ -100,7 +95,7 @@ def handle_ended(msg):
 cw.run()
 ```
 
-Available callbacks: `on_detection` (YOLO, every frame), `on_analysis` (VLM, every ~3s), `on_finding` (persisted finding), `on_voice_answer` (voice Q&A response), `on_report` (generated report), `on_viewer_joined`, `on_mode_change`, `on_session_ended`.
+Available callbacks: `on_analysis` (VLM, every ~3s), `on_finding` (persisted finding), `on_voice_answer` (voice Q&A response), `on_report` (generated report), `on_viewer_joined`, `on_mode_change`, `on_session_ended`.
 
 ---
 
@@ -126,15 +121,15 @@ cw.send({"type": "voice_question", "text": "What's the condition of the tracks?"
 
 Once the SDK is streaming, the dashboard shows:
 
-- **Live video feed** with YOLO bounding boxes overlaid
+- **Live video feed** with real-time VLM analysis overlaid
 - **VLM analysis panel** — severity, description, confidence, with severity trend tracking across repeated analyses of the same zone
-- **AI Insights** — cross-signal correlations (e.g. YOLO detects a hydraulic hose + VLM mentions fluid stain = "possible hydraulic leak")
-- **Zone checklist** — in CAT mode, the VLM identifies equipment and builds a dynamic checklist. In general mode, zones appear as they're discovered
+- **AI Insights** — cross-signal correlations and pattern detection
+- **Zone checklist** — in 797 mode, the VLM identifies equipment and builds a dynamic checklist. In general mode, zones appear as they're discovered
 - **Voice Q&A** — mic button on the video feed to ask questions about what the camera sees
 - **Unit/Site Memory** — history from prior inspections of the same unit or location
 - **End Inspection** — stops the session and shuts down the SDK connection
 
-After an inspection, view the full report (PDF or JSON), all findings (filterable by severity), and fleet-wide similar findings from the Inspections page.
+After an inspection, view the full report (PDF download), all findings (filterable by severity), 3D inspection view, fleet-wide similar findings, and an AI-generated insurance claim document.
 
 ---
 
@@ -187,9 +182,10 @@ sudo systemctl enable catwatch && sudo systemctl start catwatch
 ## Stack
 
 - **SDK**: Python — OpenCV, websockets, numpy
-- **Backend**: Modal (T4 for YOLO, A100 for Qwen2-VL + Whisper), FastAPI orchestrator
-- **Frontend**: Next.js 15 on Vercel, PostgreSQL via Prisma, magic link auth
+- **Backend**: Modal (A100 for Qwen2-VL + Whisper), FastAPI orchestrator
+- **Frontend**: Next.js 15 on Vercel, PostgreSQL via Prisma, Magic.link auth
 - **Memory**: Supermemory for cross-inspection knowledge
+- **Insurance Claims**: OpenAI GPT-4o-mini for AI-generated claim documents
 
 See [DEV.md](DEV.md) for the developer guide (deploying, environment setup, architecture details).
 
@@ -198,7 +194,9 @@ See [DEV.md](DEV.md) for the developer guide (deploying, environment setup, arch
 ## Troubleshooting
 
 - **`ModuleNotFoundError: catwatch`** — run `pip install catwatch`
+- **`ValueError: mode must be one of general, 797`** — update your SDK to v0.3+ and use `mode="797"` (not `mode="cat"`)
 - **"Invalid API key"** — create a key in Dashboard > API Keys
-- **No VLM analysis** — YOLO needs to detect something first, and the dashboard must be open (GPU only runs when a viewer is connected)
+- **No VLM analysis** — the dashboard must be open (GPU only runs when a viewer is connected). VLM fires on a cadence; give it ~5 seconds after the dashboard loads
 - **Dashboard video blank** — check that `NEXT_PUBLIC_BACKEND_WS` matches your Modal deployment URL
 - **Supermemory empty on second run** — make sure `SUPERMEMORY_API_KEY` is set in your web `.env.local`
+- **Insurance claim button missing** — only shown for completed (non-active) sessions with findings. Requires `OPENAI_API_KEY` in `.env.local`
