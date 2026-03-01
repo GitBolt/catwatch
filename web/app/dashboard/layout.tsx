@@ -9,7 +9,7 @@ export default function DashboardLayout({
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <nav style={{ borderBottom: "1px solid var(--border)", background: "rgba(20,19,19,0.85)", backdropFilter: "blur(16px)" }}>
-        <div className="container nav-inner" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24, height: 56 }}>
+        <div className="nav-inner" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24, height: 56, padding: "0 8px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
             <Link href="/dashboard" style={{ display: "flex", alignItems: "center" }}>
               <Image
@@ -25,6 +25,9 @@ export default function DashboardLayout({
             </Link>
             <Link href="/dashboard/inspections" className="nav-link" style={{ fontSize: 13, color: "var(--text-muted)" }}>
               Inspections
+            </Link>
+            <Link href="/dashboard/simulator" className="nav-link" style={{ fontSize: 13, color: "var(--text-muted)" }}>
+              Simulator
             </Link>
           </div>
           <Link

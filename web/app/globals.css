@@ -84,6 +84,17 @@ pre { font-family: "SF Mono", "Fira Code", monospace; }
   box-sizing: border-box;
 }
 
+/* Simulator page: full viewport width */
+.simulator-page {
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding-left: max(16px, calc((100vw - 1600px) / 2));
+  padding-right: max(16px, calc((100vw - 1600px) / 2));
+  box-sizing: border-box;
+}
+
 /* Inspection detail / report page: full viewport width, no squishing */
 .inspection-detail-page {
   width: 100vw;

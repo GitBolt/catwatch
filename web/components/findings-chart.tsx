@@ -68,7 +68,7 @@ export function FindingsChart({ data }: Props) {
               fontSize: 12,
             }}
             labelStyle={{ color: "var(--text)" }}
-            formatter={(value: number) => [value, "Findings"]}
+            formatter={(value) => [value ?? 0, "Findings"]}
             labelFormatter={(label) => `Date: ${label}`}
           />
           <Line

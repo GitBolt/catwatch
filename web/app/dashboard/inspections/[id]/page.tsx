@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { ReportPreview } from "@/components/report-preview";
 import { FleetSimilarFindings } from "@/components/fleet-similar-findings";
+import { ModelViewerLoader } from "@/components/model-viewer-loader";
+import { InsuranceClaimButton } from "@/components/insurance-claim";
 
 export default async function InspectionDetailPage({
   params,
@@ -71,13 +73,18 @@ export default async function InspectionDetailPage({
             {inspectionSession.status}
           </span>
         </div>
-        <div className="header-meta" style={{ display: "flex", gap: 16, fontSize: 13, color: "var(--text-muted)" }}>
-          <span>{new Date(inspectionSession.createdAt).toLocaleDateString()}</span>
-          <span style={{ textTransform: "capitalize" }}>{inspectionSession.mode}</span>
-          <span>{duration !== null ? `${duration} min` : "Active"}</span>
-          <span>{Math.round(inspectionSession.coveragePct)}% coverage</span>
-          {inspectionSession.unitSerial && (
-            <span className="mono" style={{ color: "var(--amber)" }}>{inspectionSession.unitSerial}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div className="header-meta" style={{ display: "flex", gap: 16, fontSize: 13, color: "var(--text-muted)" }}>
+            <span>{new Date(inspectionSession.createdAt).toLocaleDateString()}</span>
+            <span style={{ textTransform: "capitalize" }}>{inspectionSession.mode}</span>
+            <span>{duration !== null ? `${duration} min` : "Active"}</span>
+            <span>{Math.round(inspectionSession.coveragePct)}% coverage</span>
+            {inspectionSession.unitSerial && (
+              <span className="mono" style={{ color: "var(--amber)" }}>{inspectionSession.unitSerial}</span>
+            )}
+          </div>
+          {inspectionSession.status !== "active" && (
+            <InsuranceClaimButton inspection={inspectionData} />
           )}
         </div>
       </div>
@@ -91,6 +98,16 @@ export default async function InspectionDetailPage({
               {inspectionSession.model && <span style={{ color: "var(--text-dim)", marginLeft: 8 }}>{inspectionSession.model}</span>}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 3D Inspection View */}
+      {inspectionSession.status !== "active" && inspectionData.findings.length > 0 && (
+        <div style={{ padding: 24, background: "var(--bg-card)", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, letterSpacing: "-0.01em" }}>
+            3D Inspection View
+          </h2>
+          <ModelViewerLoader findings={inspectionData.findings} />
         </div>
       )}
 
