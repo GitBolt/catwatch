@@ -17,7 +17,7 @@ export function FindingsList({ findings, hasMemoryContext }: Props) {
     return (
       <div
         className="card"
-        style={{ textAlign: "center", fontSize: 12, color: "var(--text-dim)" }}
+        style={{ padding: "10px 12px", textAlign: "center", fontSize: 11, color: "var(--text-dim)" }}
       >
         No findings yet
       </div>
@@ -29,61 +29,42 @@ export function FindingsList({ findings, hasMemoryContext }: Props) {
   const greenCount = findings.filter((f) => f.rating === "GREEN").length;
 
   return (
-    <div className="card">
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <h3 style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>Findings</h3>
+    <div className="card" style={{ padding: "10px 12px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+        <h3 style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>Findings</h3>
         {hasMemoryContext && findings.length > 0 && (
-          <span style={{
-            fontSize: 9,
-            fontWeight: 500,
-            color: "var(--amber)",
-            opacity: 0.6,
-            letterSpacing: "0.04em",
-          }}>
+          <span style={{ fontSize: 8, fontWeight: 500, color: "var(--amber)", opacity: 0.6, letterSpacing: "0.04em" }}>
             Stored to memory
           </span>
         )}
-        <div style={{ display: "flex", gap: 6, fontSize: 11, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-          {redCount > 0 && (
-            <span style={{ color: SEVERITY_COLORS.RED.text }}>{redCount} RED</span>
-          )}
-          {yellowCount > 0 && (
-            <span style={{ color: SEVERITY_COLORS.YELLOW.text }}>{yellowCount} YEL</span>
-          )}
-          {greenCount > 0 && (
-            <span style={{ color: SEVERITY_COLORS.GREEN.text }}>{greenCount} GRN</span>
-          )}
+        <div style={{ display: "flex", gap: 5, fontSize: 10, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+          {redCount > 0 && <span style={{ color: SEVERITY_COLORS.RED.text }}>{redCount}R</span>}
+          {yellowCount > 0 && <span style={{ color: SEVERITY_COLORS.YELLOW.text }}>{yellowCount}Y</span>}
+          {greenCount > 0 && <span style={{ color: SEVERITY_COLORS.GREEN.text }}>{greenCount}G</span>}
         </div>
       </div>
-      <div className="scrollable" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="scrollable" style={{ display: "flex", flexDirection: "column", gap: 3, maxHeight: "40vh" }}>
         {findings.map((f, i) => {
           const colors = SEVERITY_COLORS[f.rating] || SEVERITY_COLORS.GRAY;
-          const zoneLabel = formatZone(f.zone);
           return (
             <div
               key={i}
-              className="finding-row"
               style={{
-                borderRadius: "var(--radius)",
-                border: `1px solid ${colors.border}`,
-                padding: 8,
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 6,
+                padding: "4px 6px",
+                borderRadius: 4,
+                borderLeft: `2px solid ${colors.border}`,
                 background: colors.bg,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: colors.text }}>
-                  {f.rating}
-                </span>
-                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{zoneLabel}</span>
-              </div>
-              <p style={{ marginTop: 4, fontSize: 12, color: "var(--text-muted)" }}>{f.description}</p>
-              {f.snapshot && (
-                <img
-                  src={`data:image/jpeg;base64,${f.snapshot}`}
-                  alt="Evidence"
-                  style={{ marginTop: 6, width: "100%", borderRadius: 4, opacity: 0.85 }}
-                />
-              )}
+              <span style={{ fontSize: 9, fontWeight: 700, color: colors.text, flexShrink: 0, marginTop: 1 }}>
+                {f.rating === "GREEN" ? "G" : f.rating === "YELLOW" ? "Y" : "R"}
+              </span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.3 }}>
+                {f.description.length > 80 ? f.description.slice(0, 80) + "..." : f.description}
+              </span>
             </div>
           );
         })}

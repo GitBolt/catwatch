@@ -10,8 +10,9 @@ interface Props {
 
 const EVENT_LABELS: Record<string, string> = {
   hydraulic_leak: "Hydraulic Leak",
-  track_wear: "Track Wear",
-  ground_tool_wear: "Tool Wear",
+  tire_damage: "Tire Damage",
+  dump_body_wear: "Body Damage",
+  suspension_issue: "Suspension",
   cab_visibility: "Cab Damage",
   engine_thermal: "Engine Anomaly",
   access_safety: "Access Hazard",
@@ -27,46 +28,34 @@ export function InsightsPanel({ insights }: Props) {
   if (insights.length === 0) return null;
 
   return (
-    <div className="card">
-      <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>
-        AI Insights
-        <span style={{ fontSize: 11, fontWeight: 400, color: "var(--text-dim)", marginLeft: 8 }}>
-          cross-signal
+    <div className="card" style={{ padding: "10px 12px" }}>
+      <h3 style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+        Insights
+        <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text-dim)", marginLeft: 6 }}>
+          YOLO+VLM
         </span>
       </h3>
-      <div className="scrollable" style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 200 }}>
+      <div className="scrollable" style={{ display: "flex", flexDirection: "column", gap: 3, maxHeight: 160 }}>
         {insights.map((ins, i) => {
           const colors = SEVERITY_COLORS[ins.vlm_severity] || SEVERITY_COLORS.GRAY;
           return (
             <div
               key={`${ins.event}-${i}`}
-              className="finding-row"
               style={{
-                borderRadius: "var(--radius)",
-                border: `1px solid ${colors.border}`,
-                padding: "8px 10px",
+                padding: "4px 6px",
+                borderRadius: 4,
+                borderLeft: `2px solid ${colors.border}`,
                 background: colors.bg,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: colors.text }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: colors.text }}>
                   {EVENT_LABELS[ins.event] || ins.event}
                 </span>
-                <span style={{ fontSize: 10, color: "var(--text-dim)" }}>
-                  YOLO + VLM
-                </span>
               </div>
-              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
-                {ins.description}
+              <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0, lineHeight: 1.3 }}>
+                {ins.description.length > 100 ? ins.description.slice(0, 100) + "..." : ins.description}
               </p>
-              <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-dim)", display: "flex", gap: 8 }}>
-                <span>
-                  Components: {ins.components.join(", ")}
-                </span>
-                <span>
-                  Evidence: {ins.evidence_keywords.join(", ")}
-                </span>
-              </div>
             </div>
           );
         })}

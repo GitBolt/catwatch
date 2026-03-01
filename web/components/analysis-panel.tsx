@@ -12,13 +12,6 @@ interface Props {
 
 const ANALYSIS_TTL_MS = 12000;
 
-const DRIFT_LABELS: Record<string, { label: string; color: string }> = {
-  worsening: { label: "worsening", color: "var(--red, #b85c5c)" },
-  improving: { label: "improving", color: "#82b88a" },
-  stable: { label: "stable", color: "var(--text-dim)" },
-  inconsistent: { label: "inconsistent", color: "var(--amber, #b09340)" },
-};
-
 export function AnalysisPanel({ analysis, zoneTrends, hasMemoryContext }: Props) {
   const [visible, setVisible] = useState(false);
 
@@ -41,109 +34,59 @@ export function AnalysisPanel({ analysis, zoneTrends, hasMemoryContext }: Props)
       style={{
         borderRadius: "var(--radius)",
         border: `1px solid ${colors.border}`,
-        padding: 16,
+        padding: "10px 12px",
         background: colors.bg,
       }}
     >
-      <div style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-        <span
-          style={{
-            display: "inline-block",
-            borderRadius: 4,
-            padding: "2px 8px",
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: "0.05em",
-            textTransform: "uppercase" as const,
-            color: colors.text,
-          }}
-        >
+      {/* Header: severity + callout + memory badge */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: colors.text, letterSpacing: "0.05em" }}>
           {sev}
         </span>
         {analysis.callout && (
-          <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text)" }}>
+          <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text)", flex: 1 }}>
             {analysis.callout}
           </span>
         )}
-      </div>
-      {hasMemoryContext && (
-        <div style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 5,
-          marginBottom: 6,
-          padding: "2px 8px",
-          borderRadius: "var(--radius-sm)",
-          background: "rgba(196, 162, 76, 0.08)",
-          border: "1px solid rgba(196, 162, 76, 0.15)",
-        }}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        {hasMemoryContext && (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.6 }}>
             <circle cx="12" cy="12" r="10" />
             <path d="M12 6v6l4 2" />
           </svg>
-          <span style={{ fontSize: 10, fontWeight: 500, color: "var(--amber)", letterSpacing: "0.02em" }}>
-            Compared against prior inspections
-          </span>
-        </div>
-      )}
-      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>{analysis.description}</p>
-      {analysis.findings.length > 0 && (
-        <ul style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-          {analysis.findings.map((f, i) => (
-            <li key={i} style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              - {f}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div style={{ marginTop: 8, display: "flex", gap: 12, fontSize: 12, color: "var(--text-dim)", flexWrap: "wrap" }}>
-        {analysis.zone && <span>Zone: {analysis.zone}</span>}
+        )}
         {typeof analysis.confidence === "number" && (
-          <span style={{ opacity: 0.7 }}>
-            Confidence: {Math.round(analysis.confidence * 100)}%
+          <span style={{ fontSize: 10, color: "var(--text-dim)", flexShrink: 0 }}>
+            {Math.round(analysis.confidence * 100)}%
           </span>
         )}
       </div>
 
+      {/* Description — truncated */}
+      <p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4, margin: 0 }}>
+        {analysis.description.length > 150 ? analysis.description.slice(0, 150) + "..." : analysis.description}
+      </p>
+
+      {/* Trend bar */}
       {trend && trend.sample_count >= 2 && (
         <div
           style={{
-            marginTop: 10,
-            paddingTop: 8,
+            marginTop: 6,
+            paddingTop: 5,
             borderTop: "1px solid rgba(255,255,255,0.06)",
             display: "flex",
             alignItems: "center",
-            gap: 10,
-            fontSize: 11,
+            gap: 8,
+            fontSize: 10,
+            color: "var(--text-dim)",
           }}
         >
-          <span style={{ color: "var(--text-dim)" }}>
-            {trend.sample_count} analyses
+          <span>{trend.sample_count}x</span>
+          <span style={{ display: "flex", gap: 3, fontVariantNumeric: "tabular-nums" }}>
+            {trend.severity_counts.RED > 0 && <span style={{ color: SEVERITY_COLORS.RED.text }}>{trend.severity_counts.RED}R</span>}
+            {trend.severity_counts.YELLOW > 0 && <span style={{ color: SEVERITY_COLORS.YELLOW.text }}>{trend.severity_counts.YELLOW}Y</span>}
+            {trend.severity_counts.GREEN > 0 && <span style={{ color: SEVERITY_COLORS.GREEN.text }}>{trend.severity_counts.GREEN}G</span>}
           </span>
-          <span style={{ display: "flex", gap: 4, fontVariantNumeric: "tabular-nums" }}>
-            {trend.severity_counts.RED > 0 && (
-              <span style={{ color: SEVERITY_COLORS.RED.text }}>
-                {trend.severity_counts.RED}R
-              </span>
-            )}
-            {trend.severity_counts.YELLOW > 0 && (
-              <span style={{ color: SEVERITY_COLORS.YELLOW.text }}>
-                {trend.severity_counts.YELLOW}Y
-              </span>
-            )}
-            {trend.severity_counts.GREEN > 0 && (
-              <span style={{ color: SEVERITY_COLORS.GREEN.text }}>
-                {trend.severity_counts.GREEN}G
-              </span>
-            )}
-          </span>
-          <span style={{ color: "var(--text-dim)" }}>
-            {Math.round(trend.confidence_avg * 100)}% avg
-          </span>
-          <span style={{ color: DRIFT_LABELS[trend.drift]?.color ?? "var(--text-dim)", fontWeight: 600 }}>
-            {DRIFT_LABELS[trend.drift]?.label ?? trend.drift}
-          </span>
+          <span>{Math.round(trend.confidence_avg * 100)}%</span>
         </div>
       )}
     </div>
