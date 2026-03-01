@@ -107,7 +107,7 @@ class CatWatch:
         with self._lock:
             return self._latest_frame
 
-    def connect(self, source=0, mode="general", unit_serial=None, model=None, fleet_tag=None):
+    def connect(self, source=0, mode="general", unit_serial=None, model=None, fleet_tag=None, location=None):
         """Create a session and connect to the inspection backend.
 
         Args:
@@ -117,6 +117,8 @@ class CatWatch:
             unit_serial: Equipment serial number for fleet tracking.
             model: Equipment model (e.g. 'CAT 325').
             fleet_tag: Fleet group identifier.
+            location: Site/location identifier for general mode memory
+                      (e.g. 'warehouse-7B', 'site-14', or 'geo:37.77,-122.42').
         """
         self._mode = mode
 
@@ -127,6 +129,8 @@ class CatWatch:
             body["model"] = model
         if fleet_tag:
             body["fleet_tag"] = fleet_tag
+        if location:
+            body["location"] = location
         data = json.dumps(body).encode()
         url = f"{self._server}/api/sessions"
         req = urllib.request.Request(

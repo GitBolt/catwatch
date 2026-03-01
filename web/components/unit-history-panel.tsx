@@ -7,12 +7,27 @@ interface Props {
   unitSerial: string | null;
   unitModel: string | null;
   fleetTag: string | null;
+  location: string | null;
+  memoryKey: string | null;
   profile: UnitProfile | null;
   loading: boolean;
 }
 
-export function UnitHistoryPanel({ unitSerial, unitModel, fleetTag, profile, loading }: Props) {
-  if (!unitSerial) return null;
+export function UnitHistoryPanel({ unitSerial, unitModel, fleetTag, location, memoryKey, profile, loading }: Props) {
+  if (!memoryKey) return null;
+
+  const isGeo = memoryKey.startsWith("geo:");
+  const isLocation = !unitSerial && (location || isGeo);
+  const title = isLocation ? "Site Memory" : "Unit Memory";
+
+  let subtitle = memoryKey;
+  if (unitSerial) {
+    subtitle = unitSerial;
+  } else if (location) {
+    subtitle = location;
+  } else if (isGeo) {
+    subtitle = `Near ${memoryKey.replace("geo:", "")}`;
+  }
 
   return (
     <div
@@ -34,14 +49,13 @@ export function UnitHistoryPanel({ unitSerial, unitModel, fleetTag, profile, loa
           }}
         />
         <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
-          Unit Memory
+          {title}
         </span>
       </div>
 
-      {/* Unit identity */}
       <div style={{ marginBottom: 12, fontSize: 12, color: "var(--text-dim)" }}>
         <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: "var(--amber)" }}>
-          {unitSerial}
+          {subtitle}
         </div>
         {unitModel && <div style={{ marginTop: 2 }}>{unitModel}</div>}
         {fleetTag && <div style={{ marginTop: 2 }}>Fleet: {fleetTag}</div>}
@@ -49,7 +63,7 @@ export function UnitHistoryPanel({ unitSerial, unitModel, fleetTag, profile, loa
 
       {loading && (
         <div style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>
-          Loading unit history...
+          Loading {isLocation ? "site" : "unit"} history...
         </div>
       )}
 
@@ -61,7 +75,6 @@ export function UnitHistoryPanel({ unitSerial, unitModel, fleetTag, profile, loa
 
       {profile && (
         <>
-          {/* Static profile — long-term facts */}
           {profile.profile.static.length > 0 && (
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -77,7 +90,6 @@ export function UnitHistoryPanel({ unitSerial, unitModel, fleetTag, profile, loa
             </div>
           )}
 
-          {/* Dynamic profile — recent activity */}
           {profile.profile.dynamic.length > 0 && (
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -93,7 +105,6 @@ export function UnitHistoryPanel({ unitSerial, unitModel, fleetTag, profile, loa
             </div>
           )}
 
-          {/* Related findings from past inspections */}
           {profile.searchResults && profile.searchResults.results.length > 0 && (
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>

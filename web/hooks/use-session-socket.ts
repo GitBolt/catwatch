@@ -6,6 +6,8 @@ import type {
   AnalysisData,
   FindingData,
   EquipmentInfo,
+  InsightData,
+  ZoneTrend,
   ServerMessage,
 } from "@/lib/types";
 
@@ -31,11 +33,13 @@ export interface SessionEndSummary {
 
 interface SessionState {
   connected: boolean;
-  frame: Blob | null;
-  frameId: number;
+  frameRef: React.RefObject<Blob | null>;
+  hasFrame: boolean;
   detections: Detection[];
   analysis: AnalysisData | null;
   findings: FindingData[];
+  insights: InsightData[];
+  zoneTrends: Record<string, ZoneTrend>;
   zonesSeen: Set<string>;
   coverage: number;
   totalZones: number;
@@ -48,6 +52,8 @@ interface SessionState {
   unitSerial: string | null;
   unitModel: string | null;
   fleetTag: string | null;
+  location: string | null;
+  memoryKey: string | null;
   unitProfile: UnitProfile | null;
   unitProfileLoading: boolean;
   sessionEnded: SessionEndSummary | null;
@@ -98,11 +104,14 @@ async function fetchUnitProfile(unitSerial: string): Promise<UnitProfile | null>
 export function useSessionSocket(sessionId: string | null): SessionState {
   const wsRef = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
-  const [frame, setFrame] = useState<Blob | null>(null);
-  const [frameId, setFrameId] = useState(0);
+  const frameRef = useRef<Blob | null>(null);
+  const hasFrameRef = useRef(false);
+  const [hasFrame, setHasFrame] = useState(false);
   const [detections, setDetections] = useState<Detection[]>([]);
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
   const [findings, setFindings] = useState<FindingData[]>([]);
+  const [insights, setInsights] = useState<InsightData[]>([]);
+  const [zoneTrends, setZoneTrends] = useState<Record<string, ZoneTrend>>({});
   const [zonesSeen, setZonesSeen] = useState<Set<string>>(new Set());
   const [coverage, setCoverage] = useState(0);
   const [totalZones, setTotalZones] = useState(0);
@@ -115,11 +124,16 @@ export function useSessionSocket(sessionId: string | null): SessionState {
   const [unitSerial, setUnitSerial] = useState<string | null>(null);
   const [unitModel, setUnitModel] = useState<string | null>(null);
   const [fleetTag, setFleetTag] = useState<string | null>(null);
+  const [location, setLocation] = useState<string | null>(null);
+  const [geoKey, setGeoKey] = useState<string | null>(null);
   const [unitProfile, setUnitProfile] = useState<UnitProfile | null>(null);
   const [unitProfileLoading, setUnitProfileLoading] = useState(false);
   const [sessionEnded, setSessionEnded] = useState<SessionEndSummary | null>(null);
 
   const profileFetchedRef = useRef<string | null>(null);
+  const geoAttemptedRef = useRef(false);
+
+  const memoryKey = unitSerial || location || geoKey;
 
   const send = useCallback((msg: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -136,18 +150,18 @@ export function useSessionSocket(sessionId: string | null): SessionState {
   }, [send]);
 
   useEffect(() => {
-    if (!unitSerial || profileFetchedRef.current === unitSerial) return;
-    profileFetchedRef.current = unitSerial;
+    if (!memoryKey || profileFetchedRef.current === memoryKey) return;
+    profileFetchedRef.current = memoryKey;
 
     setUnitProfileLoading(true);
-    fetchUnitProfile(unitSerial).then((profile) => {
+    fetchUnitProfile(memoryKey).then((profile) => {
       setUnitProfile(profile);
       setUnitProfileLoading(false);
 
       if (profile) {
         const parts: string[] = [];
         if (profile.profile.static.length > 0) {
-          parts.push("Unit history: " + profile.profile.static.join(" "));
+          parts.push("Site history: " + profile.profile.static.join(" "));
         }
         if (profile.profile.dynamic.length > 0) {
           parts.push("Recent: " + profile.profile.dynamic.join(" "));
@@ -156,7 +170,22 @@ export function useSessionSocket(sessionId: string | null): SessionState {
         send({ type: "unit_context", context: contextStr });
       }
     });
-  }, [unitSerial, send]);
+  }, [memoryKey, send]);
+
+  useEffect(() => {
+    if (unitSerial || location || geoAttemptedRef.current) return;
+    geoAttemptedRef.current = true;
+    if (!("geolocation" in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude.toFixed(3);
+        const lng = pos.coords.longitude.toFixed(3);
+        setGeoKey(`geo:${lat},${lng}`);
+      },
+      () => {},
+      { timeout: 5000, maximumAge: 300000 },
+    );
+  }, [unitSerial, location]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -164,7 +193,7 @@ export function useSessionSocket(sessionId: string | null): SessionState {
     let reconnectTimer: ReturnType<typeof setTimeout>;
     let backoff = 2000;
     let stopped = false;
-    let currentUnitSerial: string | null = null;
+    let currentMemoryKey: string | null = null;
 
     function connect() {
       if (stopped) return;
@@ -191,11 +220,12 @@ export function useSessionSocket(sessionId: string | null): SessionState {
       ws.onmessage = (event) => {
         if (event.data instanceof ArrayBuffer) {
           if (event.data.byteLength < 5) return;
-          const view = new DataView(event.data);
-          const id = view.getUint32(0);
           const jpegBytes = event.data.slice(4);
-          setFrame(new Blob([jpegBytes], { type: "image/jpeg" }));
-          setFrameId(id);
+          frameRef.current = new Blob([jpegBytes], { type: "image/jpeg" });
+          if (!hasFrameRef.current) {
+            hasFrameRef.current = true;
+            setHasFrame(true);
+          }
           return;
         }
 
@@ -218,11 +248,11 @@ export function useSessionSocket(sessionId: string | null): SessionState {
 
           case "analysis":
             setAnalysis(msg.data);
-            if (currentUnitSerial && msg.data.findings) {
+            if (currentMemoryKey && msg.data.findings) {
               for (const f of msg.data.findings) {
                 if (typeof f === "string" && f.trim()) {
                   storeMemory(
-                    currentUnitSerial,
+                    currentMemoryKey,
                     f,
                     msg.data.zone ?? "unknown",
                     msg.data.severity,
@@ -255,14 +285,22 @@ export function useSessionSocket(sessionId: string | null): SessionState {
             }
             break;
 
+          case "insight":
+            setInsights((prev) => [...prev.slice(-19), msg.data]);
+            break;
+
+          case "zone_trend":
+            setZoneTrends((prev) => ({ ...prev, [msg.zone]: msg.trend }));
+            break;
+
           case "zone_first_seen":
             setZonesSeen((prev) => new Set([...prev, msg.zone]));
             break;
 
           case "report":
             setReport(msg.data as Record<string, unknown>);
-            if (currentUnitSerial) {
-              storeReport(currentUnitSerial, msg.data);
+            if (currentMemoryKey) {
+              storeReport(currentMemoryKey, msg.data);
             }
             break;
 
@@ -270,11 +308,15 @@ export function useSessionSocket(sessionId: string | null): SessionState {
             backoff = 2000;
             setMode(msg.mode);
             if (msg.unit_serial) {
-              currentUnitSerial = msg.unit_serial;
               setUnitSerial(msg.unit_serial);
+              currentMemoryKey = msg.unit_serial;
             }
             if (msg.unit_model) setUnitModel(msg.unit_model);
             if (msg.fleet_tag) setFleetTag(msg.fleet_tag);
+            if (msg.location) {
+              setLocation(msg.location);
+              if (!currentMemoryKey) currentMemoryKey = msg.location;
+            }
             break;
 
           case "session_ended":
@@ -297,11 +339,13 @@ export function useSessionSocket(sessionId: string | null): SessionState {
 
   return {
     connected,
-    frame,
-    frameId,
+    frameRef,
+    hasFrame,
     detections,
     analysis,
     findings,
+    insights,
+    zoneTrends,
     zonesSeen,
     coverage,
     totalZones,
@@ -314,6 +358,8 @@ export function useSessionSocket(sessionId: string | null): SessionState {
     unitSerial,
     unitModel,
     fleetTag,
+    location,
+    memoryKey,
     unitProfile,
     unitProfileLoading,
     sessionEnded,

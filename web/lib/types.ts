@@ -81,6 +81,7 @@ export interface SessionStateMessage {
   unit_serial?: string | null;
   unit_model?: string | null;
   fleet_tag?: string | null;
+  location?: string | null;
 }
 
 export interface ZoneBriefMessage {
@@ -123,6 +124,32 @@ export interface EquipmentIdentifiedMessage {
   data: EquipmentInfo;
 }
 
+export interface InsightData {
+  event: string;
+  description: string;
+  components: string[];
+  evidence_keywords: string[];
+  vlm_severity: "GREEN" | "YELLOW" | "RED";
+}
+
+export interface InsightMessage {
+  type: "insight";
+  data: InsightData;
+}
+
+export interface ZoneTrend {
+  severity_counts: { RED: number; YELLOW: number; GREEN: number };
+  confidence_avg: number;
+  drift: "worsening" | "improving" | "stable" | "inconsistent";
+  sample_count: number;
+}
+
+export interface ZoneTrendMessage {
+  type: "zone_trend";
+  zone: string;
+  trend: ZoneTrend;
+}
+
 export type ServerMessage =
   | DetectionMessage
   | AnalysisMessage
@@ -136,7 +163,9 @@ export type ServerMessage =
   | ErrorMessage
   | SessionEndedMessage
   | TranscriptMessage
-  | EquipmentIdentifiedMessage;
+  | EquipmentIdentifiedMessage
+  | InsightMessage
+  | ZoneTrendMessage;
 
 // Session types for the dashboard
 export interface SessionSummary {

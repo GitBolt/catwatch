@@ -18,24 +18,29 @@ class YoloDetector:
         from pathlib import Path
         from ultralytics import YOLO
 
+        self.general_model = YOLO("yolov8n.pt")
+        print("[YoloDetector] Loaded vanilla yolov8n for general mode.")
+
         custom = Path("/models/dronecat_yolo_best.pt")
         if custom.exists():
-            self.model = YOLO(str(custom))
-            print(f"[YoloDetector] Loaded custom dronecat model from volume.")
+            self.cat_model = YOLO(str(custom))
+            print("[YoloDetector] Loaded fine-tuned dronecat model for cat mode.")
         else:
-            self.model = YOLO("yolov8n.pt")
-            print("[YoloDetector] No custom model found — using yolov8n (COCO fallback).")
+            self.cat_model = self.general_model
+            print("[YoloDetector] No custom model found — cat mode will use yolov8n fallback.")
 
     @modal.method()
-    def detect(self, frame_b64):
+    def detect(self, frame_b64, mode="general"):
         from PIL import Image
         import time
+
+        model = self.cat_model if mode == "cat" else self.general_model
 
         img_bytes = base64.b64decode(frame_b64)
         image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
 
         t0 = time.time()
-        results = self.model(image, verbose=False)
+        results = model(image, verbose=False)
         inference_ms = round((time.time() - t0) * 1000, 1)
 
         detections = []

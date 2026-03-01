@@ -1,13 +1,14 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useSessionSocket } from "@/hooks/use-session-socket";
 import { VideoCanvas } from "@/components/video-canvas";
 import { DetectionOverlay } from "@/components/detection-overlay";
 import { AnalysisPanel } from "@/components/analysis-panel";
 import { ZonePanel } from "@/components/zone-panel";
 import { FindingsList } from "@/components/findings-list";
+import { InsightsPanel } from "@/components/insights-panel";
 import { VoiceButton } from "@/components/voice-button";
 import { TopBar } from "@/components/top-bar";
 import { UnitHistoryPanel } from "@/components/unit-history-panel";
@@ -15,27 +16,30 @@ import { UnitHistoryPanel } from "@/components/unit-history-panel";
 export default function LiveSessionPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [canvasSize, setCanvasSize] = useState({ width: 960, height: 540 });
+  const [canvasSize] = useState({ width: 960, height: 540 });
   const [confirmEnd, setConfirmEnd] = useState(false);
 
   const {
     connected,
-    frame,
+    frameRef,
+    hasFrame,
     detections,
     analysis,
     findings,
+    insights,
+    zoneTrends,
     zonesSeen,
     coverage,
     totalZones,
     mode,
     yoloMs,
     voiceAnswer,
-    transcript,
     equipmentInfo,
     unitSerial,
     unitModel,
     fleetTag,
+    location,
+    memoryKey,
     unitProfile,
     unitProfileLoading,
     sessionEnded,
@@ -43,13 +47,6 @@ export default function LiveSessionPage() {
     sendAudio,
     endSession,
   } = useSessionSocket(id);
-
-  const handleQuestion = useCallback(
-    (text: string) => {
-      send({ type: "voice_question", text });
-    },
-    [send],
-  );
 
   const handleModeChange = useCallback(
     (newMode: string) => {
@@ -133,7 +130,6 @@ export default function LiveSessionPage() {
       <div style={{ display: "flex", minHeight: 0, flex: 1, gap: 12 }}>
         {/* Video + Overlay */}
         <div
-          ref={containerRef}
           style={{
             position: "relative",
             flex: 1,
@@ -143,7 +139,7 @@ export default function LiveSessionPage() {
           }}
         >
           <VideoCanvas
-            frame={frame}
+            frameRef={frameRef}
             width={canvasSize.width}
             height={canvasSize.height}
           />
@@ -152,7 +148,7 @@ export default function LiveSessionPage() {
             width={canvasSize.width}
             height={canvasSize.height}
           />
-          {!connected && !frame && (
+          {!connected && !hasFrame && (
             <div
               style={{
                 position: "absolute",
@@ -182,10 +178,13 @@ export default function LiveSessionPage() {
             unitSerial={unitSerial}
             unitModel={unitModel}
             fleetTag={fleetTag}
+            location={location}
+            memoryKey={memoryKey}
             profile={unitProfile}
             loading={unitProfileLoading}
           />
-          <AnalysisPanel analysis={analysis} />
+          <AnalysisPanel analysis={analysis} zoneTrends={zoneTrends} />
+          {insights.length > 0 && <InsightsPanel insights={insights} />}
           <ZonePanel zonesSeen={zonesSeen} coverage={coverage} totalZones={totalZones || 15} equipmentInfo={equipmentInfo} />
           <FindingsList findings={findings} />
         </div>
@@ -203,7 +202,7 @@ export default function LiveSessionPage() {
           backdropFilter: "blur(12px)",
         }}
       >
-        <VoiceButton onQuestion={handleQuestion} onAudio={sendAudio} voiceAnswer={voiceAnswer} transcript={transcript} />
+        <VoiceButton onAudio={sendAudio} voiceAnswer={voiceAnswer} />
 
         <div style={{ marginLeft: "auto" }}>
           {confirmEnd ? (

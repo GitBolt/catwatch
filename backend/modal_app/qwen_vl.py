@@ -172,3 +172,34 @@ class Qwen25VLInspector:
             return " ".join(s.text.strip() for s in segments).strip()
         finally:
             os.unlink(tmp_path)
+
+    @modal.method()
+    def voice_answer(self, audio_bytes: bytes, image_b64: str, context: str) -> dict:
+        """Transcribe audio + generate answer in a single GPU call (avoids double RPC)."""
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
+            f.write(audio_bytes)
+            tmp_path = f.name
+        try:
+            segments, _ = self.whisper.transcribe(tmp_path, beam_size=3, language="en")
+            transcript = " ".join(s.text.strip() for s in segments).strip()
+        finally:
+            os.unlink(tmp_path)
+
+        if not transcript or len(transcript) < 2:
+            return {"transcript": "", "answer": ""}
+
+        prompt = (
+            f'{context} The operator asks: "{transcript}"\n'
+            "Answer based on what you see in the image. "
+            "Keep each sentence short and direct. "
+            "If it's a yes/no question, state yes or no first, then briefly explain why. "
+            "For all other questions, give a specific and detailed answer with concrete observations — never be vague."
+        )
+        content = []
+        if image_b64:
+            content.append(self._image_message(image_b64))
+        content.append({"type": "text", "text": prompt})
+        messages = [{"role": "user", "content": content}]
+        answer = self._run(messages, max_new_tokens=150)
+        return {"transcript": transcript, "answer": answer}

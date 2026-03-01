@@ -1,63 +1,72 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 
 interface Props {
-  frame: Blob | null;
+  frameRef: RefObject<Blob | null>;
   width?: number;
   height?: number;
 }
 
-export function VideoCanvas({ frame, width = 960, height = 540 }: Props) {
+export function VideoCanvas({ frameRef, width = 960, height = 540 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const dimsRef = useRef({ w: 0, h: 0 });
   const renderingRef = useRef(false);
-  const latestFrameRef = useRef<Blob | null>(null);
 
   useEffect(() => {
-    if (!frame || !canvasRef.current) return;
+    let running = true;
 
-    latestFrameRef.current = frame;
+    function tick() {
+      if (!running) return;
 
-    // Skip if already decoding a frame — the next render will pick up latestFrameRef
-    if (renderingRef.current) return;
-    renderingRef.current = true;
+      const blob = frameRef.current;
+      if (blob && !renderingRef.current) {
+        frameRef.current = null;
+        renderingRef.current = true;
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      renderingRef.current = false;
-      return;
-    }
-
-    function renderLatest() {
-      const blob = latestFrameRef.current;
-      if (!blob) {
-        renderingRef.current = false;
-        return;
-      }
-      latestFrameRef.current = null;
-
-      createImageBitmap(blob)
-        .then((bitmap) => {
-          if (canvas.width !== bitmap.width) canvas.width = bitmap.width;
-          if (canvas.height !== bitmap.height) canvas.height = bitmap.height;
-          ctx!.drawImage(bitmap, 0, 0);
-          bitmap.close();
-
-          // If a newer frame arrived while we were decoding, render it
-          if (latestFrameRef.current) {
-            requestAnimationFrame(renderLatest);
-          } else {
-            renderingRef.current = false;
-          }
-        })
-        .catch(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) {
           renderingRef.current = false;
-        });
+          requestAnimationFrame(tick);
+          return;
+        }
+
+        if (!ctxRef.current) {
+          ctxRef.current = canvas.getContext("2d");
+        }
+        const ctx = ctxRef.current;
+        if (!ctx) {
+          renderingRef.current = false;
+          requestAnimationFrame(tick);
+          return;
+        }
+
+        createImageBitmap(blob)
+          .then((bitmap) => {
+            if (dimsRef.current.w !== bitmap.width || dimsRef.current.h !== bitmap.height) {
+              canvas.width = bitmap.width;
+              canvas.height = bitmap.height;
+              dimsRef.current = { w: bitmap.width, h: bitmap.height };
+            }
+            ctx.drawImage(bitmap, 0, 0);
+            bitmap.close();
+            renderingRef.current = false;
+          })
+          .catch(() => {
+            renderingRef.current = false;
+          });
+      }
+
+      requestAnimationFrame(tick);
     }
 
-    requestAnimationFrame(renderLatest);
-  }, [frame]);
+    requestAnimationFrame(tick);
+
+    return () => {
+      running = false;
+    };
+  }, [frameRef]);
 
   return (
     <canvas

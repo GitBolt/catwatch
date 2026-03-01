@@ -331,7 +331,7 @@ def web():
 
             yolo_busy = True
             try:
-                result = await asyncio.to_thread(yolo.detect.remote, frame_b64)
+                result = await asyncio.to_thread(yolo.detect.remote, frame_b64, inspection_mode)
                 detections = result.get("detections", [])
                 yolo_ms = result.get("yolo_ms", 0)
 
@@ -455,6 +455,7 @@ def web():
         unit_serial = body.get("unit_serial")
         unit_model = body.get("model")
         fleet_tag = body.get("fleet_tag")
+        location = body.get("location")
 
         if not api_key:
             return JSONResponse({"error": "api_key required"}, status_code=400)
@@ -478,6 +479,7 @@ def web():
             "unit_serial": unit_serial,
             "unit_model": unit_model,
             "fleet_tag": fleet_tag,
+            "location": location,
             "unit_context": None,
             "ingest_ws": None,
             "viewer_wss": [],
@@ -689,8 +691,14 @@ def web():
 
         async def run_voice_session(question, frame_b64):
             try:
-                context = "You are inspecting a CAT 325 excavator." if session["mode"] == "cat" else "You are a visual copilot for general scene and safety monitoring."
-                prompt = f'{context} The technician asks: "{question}"\nAnswer in one concise sentence based on the image. Be specific and avoid repeating the question.'
+                context = "You are inspecting a CAT 325 excavator." if session["mode"] == "cat" else "You are a visual copilot."
+                prompt = (
+                    f'{context} The technician asks: "{question}"\n'
+                    "Answer based on what you see in the image. "
+                    "Keep each sentence short and direct. "
+                    "If it's a yes/no question, state yes or no first, then briefly explain why. "
+                    "For all other questions, give a specific and detailed answer with concrete observations — never be vague."
+                )
                 answer = await asyncio.wait_for(
                     asyncio.to_thread(qwen.generate.remote, prompt, frame_b64), timeout=30,
                 )
@@ -703,7 +711,7 @@ def web():
         async def process_yolo_session(frame_b64, frame_id, frame_client_ts):
             session["yolo_busy"] = True
             try:
-                result = await asyncio.to_thread(yolo.detect.remote, frame_b64)
+                result = await asyncio.to_thread(yolo.detect.remote, frame_b64, session["mode"])
                 detections = result.get("detections", [])
                 yolo_ms = result.get("yolo_ms", 0)
 
@@ -952,6 +960,7 @@ def web():
                 "unit_serial": db_sess.get("unit_serial"),
                 "unit_model": db_sess.get("model"),
                 "fleet_tag": db_sess.get("fleet_tag"),
+                "location": db_sess.get("location"),
                 "unit_context": None,
                 "ingest_ws": None,
                 "viewer_wss": [],
@@ -1010,6 +1019,7 @@ def web():
                 "unit_serial": db_sess.get("unit_serial"),
                 "unit_model": db_sess.get("model"),
                 "fleet_tag": db_sess.get("fleet_tag"),
+                "location": db_sess.get("location"),
                 "unit_context": None,
                 "ingest_ws": None,
                 "viewer_wss": [],
@@ -1045,6 +1055,7 @@ def web():
             "unit_serial": session.get("unit_serial"),
             "unit_model": session.get("unit_model"),
             "fleet_tag": session.get("fleet_tag"),
+            "location": session.get("location"),
         })
         if session.get("equipment_info"):
             await ws.send_json({"type": "equipment_identified", "data": session["equipment_info"]})
@@ -1119,25 +1130,37 @@ def web():
         await _broadcast(session, msg)
 
     async def _handle_viewer_audio(session, audio_b64, qwen_ref):
-        """Transcribe audio from browser MediaRecorder, then answer as voice question."""
+        """Transcribe + answer in a single GPU call (avoids double Modal RPC)."""
         if not audio_b64:
             return
         try:
             audio_bytes = base64.b64decode(audio_b64)
-            transcript = await asyncio.wait_for(
-                asyncio.to_thread(qwen_ref.transcribe_audio.remote, audio_bytes),
-                timeout=15,
+            frame_b64 = session.get("latest_frame_b64") or ""
+            context = "You are inspecting a CAT 325 excavator." if session["mode"] == "cat" else "You are a visual copilot."
+            result = await asyncio.wait_for(
+                asyncio.to_thread(qwen_ref.voice_answer.remote, audio_bytes, frame_b64, context),
+                timeout=30,
             )
-        except Exception as e:
-            print(f"[WHISPER] Transcription error: {e}")
+        except asyncio.TimeoutError:
             await _send_to_all(session, {
                 "type": "voice_answer",
-                "text": "Could not transcribe audio. Try the text input instead.",
+                "text": "Still loading, try again in a moment.",
+                "mode": session["mode"],
+            })
+            return
+        except Exception as e:
+            print(f"[VOICE] Error: {e}")
+            await _send_to_all(session, {
+                "type": "voice_answer",
+                "text": "Could not process audio.",
                 "mode": session["mode"],
             })
             return
 
-        if not transcript or len(transcript) < 2:
+        transcript = result.get("transcript", "")
+        answer = result.get("answer", "")
+
+        if not transcript:
             await _send_to_all(session, {
                 "type": "voice_answer",
                 "text": "Didn't catch that — could you repeat?",
@@ -1146,12 +1169,10 @@ def web():
             return
 
         await _send_to_all(session, {"type": "transcript", "text": transcript})
-
-        frame_b64 = session.get("latest_frame_b64") or ""
-        await _handle_viewer_voice(session, transcript, frame_b64, qwen_ref)
+        await _send_to_all(session, {"type": "voice_answer", "text": answer, "mode": session["mode"]})
 
     async def _handle_viewer_voice(session, question, frame_b64, qwen_ref):
-        """Handle voice question from a viewer."""
+        """Handle text voice question from a viewer."""
         if not frame_b64:
             await _send_to_all(session, {
                 "type": "voice_answer",
@@ -1161,7 +1182,13 @@ def web():
             return
         try:
             context = "You are inspecting a CAT 325 excavator." if session["mode"] == "cat" else "You are a visual copilot."
-            prompt = f'{context} The operator asks: "{question}"\nAnswer concisely based on the image.'
+            prompt = (
+                f'{context} The operator asks: "{question}"\n'
+                "Answer based on what you see in the image. "
+                "Keep each sentence short and direct. "
+                "If it's a yes/no question, state yes or no first, then briefly explain why. "
+                "For all other questions, give a specific and detailed answer with concrete observations — never be vague."
+            )
             answer = await asyncio.wait_for(
                 asyncio.to_thread(qwen_ref.generate.remote, prompt, frame_b64), timeout=30,
             )
