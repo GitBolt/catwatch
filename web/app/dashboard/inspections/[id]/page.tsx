@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ReportPreview } from "@/components/report-preview";
 import { FleetSimilarFindings } from "@/components/fleet-similar-findings";
 import { ModelViewerLoader } from "@/components/model-viewer-loader";
+import { InsuranceClaimButton } from "@/components/insurance-claim";
 
 export default async function InspectionDetailPage({
   params,
@@ -72,13 +73,18 @@ export default async function InspectionDetailPage({
             {inspectionSession.status}
           </span>
         </div>
-        <div className="header-meta" style={{ display: "flex", gap: 16, fontSize: 13, color: "var(--text-muted)" }}>
-          <span>{new Date(inspectionSession.createdAt).toLocaleDateString()}</span>
-          <span style={{ textTransform: "capitalize" }}>{inspectionSession.mode}</span>
-          <span>{duration !== null ? `${duration} min` : "Active"}</span>
-          <span>{Math.round(inspectionSession.coveragePct)}% coverage</span>
-          {inspectionSession.unitSerial && (
-            <span className="mono" style={{ color: "var(--amber)" }}>{inspectionSession.unitSerial}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div className="header-meta" style={{ display: "flex", gap: 16, fontSize: 13, color: "var(--text-muted)" }}>
+            <span>{new Date(inspectionSession.createdAt).toLocaleDateString()}</span>
+            <span style={{ textTransform: "capitalize" }}>{inspectionSession.mode}</span>
+            <span>{duration !== null ? `${duration} min` : "Active"}</span>
+            <span>{Math.round(inspectionSession.coveragePct)}% coverage</span>
+            {inspectionSession.unitSerial && (
+              <span className="mono" style={{ color: "var(--amber)" }}>{inspectionSession.unitSerial}</span>
+            )}
+          </div>
+          {inspectionSession.status !== "active" && (
+            <InsuranceClaimButton inspection={inspectionData} />
           )}
         </div>
       </div>

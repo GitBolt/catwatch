@@ -225,18 +225,109 @@ function SceneContent({
 /*  Damage panel (sidebar)                                             */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  Scenario input                                                     */
+/* ------------------------------------------------------------------ */
+
+const EXAMPLE_SCENARIOS = [
+  "Severe hailstorm with 2-inch hailstones",
+  "Truck rolled over on its side",
+  "Operating in -40°F extreme cold for 6 months",
+  "Flash flood submerged lower half of truck",
+  "Collision with another haul truck at low speed",
+  "Prolonged exposure to corrosive acidic ore dust",
+];
+
+function ScenarioInput({
+  onGenerate,
+  loading,
+}: {
+  onGenerate: (scenario: string) => void;
+  loading: boolean;
+}) {
+  const [scenario, setScenario] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const submit = () => {
+    const text = scenario.trim();
+    if (!text || loading) return;
+    onGenerate(text);
+  };
+
+  return (
+    <div style={{
+      padding: "14px 16px", borderBottom: "1px solid var(--border)",
+    }}>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+        Scenario Simulation
+      </div>
+      <textarea
+        ref={inputRef}
+        value={scenario}
+        onChange={(e) => setScenario(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
+        placeholder="Describe a scenario (e.g. severe hailstorm, truck rollover, extreme cold)…"
+        rows={2}
+        style={{
+          width: "100%", padding: "8px 10px", fontSize: 12,
+          background: "var(--bg)", border: "1px solid var(--border)",
+          borderRadius: 6, color: "var(--text)", outline: "none",
+          resize: "none", boxSizing: "border-box", lineHeight: 1.4,
+          fontFamily: "inherit",
+        }}
+      />
+      <button
+        onClick={submit}
+        disabled={loading || !scenario.trim()}
+        style={{
+          marginTop: 8, width: "100%", padding: "8px 0",
+          background: loading ? "var(--bg-elevated)" : "var(--amber)",
+          border: "none", borderRadius: 6, cursor: loading ? "wait" : "pointer",
+          fontSize: 12, color: loading ? "var(--text-dim)" : "#141313", fontWeight: 600,
+          opacity: !scenario.trim() && !loading ? 0.5 : 1,
+        }}
+      >
+        {loading ? "Analyzing scenario…" : "Simulate Scenario"}
+      </button>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+        {EXAMPLE_SCENARIOS.map((ex) => (
+          <button
+            key={ex}
+            onClick={() => { setScenario(ex); }}
+            style={{
+              padding: "2px 7px", fontSize: 10, borderRadius: 4,
+              background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)",
+              color: "#8a837c", cursor: "pointer", whiteSpace: "nowrap",
+            }}
+          >
+            {ex.length > 30 ? ex.slice(0, 28) + "…" : ex}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Damage panel (sidebar)                                             */
+/* ------------------------------------------------------------------ */
+
 function DamagePanel({
   damages,
   onRemove,
   onClear,
   selectedZone,
   onSelectZone,
+  onScenarioGenerate,
+  scenarioLoading,
 }: {
   damages: DamageEntry[];
   onRemove: (id: string) => void;
   onClear: () => void;
   selectedZone: ZoneId | null;
   onSelectZone: (z: ZoneId | null) => void;
+  onScenarioGenerate: (scenario: string) => void;
+  scenarioLoading: boolean;
 }) {
   const grouped = useMemo(() => {
     const m: Record<string, DamageEntry[]> = {};
@@ -246,12 +337,13 @@ function DamagePanel({
 
   return (
     <div style={{
-      width: 280, flexShrink: 0, display: "flex", flexDirection: "column",
+      width: 300, flexShrink: 0, display: "flex", flexDirection: "column",
       background: "var(--bg-card)", borderRadius: "var(--radius)",
       border: "1px solid var(--border)", overflow: "hidden",
     }}>
+      <ScenarioInput onGenerate={onScenarioGenerate} loading={scenarioLoading} />
       <div style={{
-        padding: "14px 16px", borderBottom: "1px solid var(--border)",
+        padding: "10px 16px", borderBottom: "1px solid var(--border)",
         display: "flex", justifyContent: "space-between", alignItems: "center",
       }}>
         <span style={{ fontSize: 13, fontWeight: 600 }}>
@@ -268,8 +360,8 @@ function DamagePanel({
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px" }}>
         {damages.length === 0 ? (
-          <p style={{ fontSize: 12, color: "#6b645e", textAlign: "center", marginTop: 32 }}>
-            Click on the 3D model to simulate damage
+          <p style={{ fontSize: 12, color: "#6b645e", textAlign: "center", marginTop: 24 }}>
+            Click on the 3D model or describe a scenario above to simulate damage
           </p>
         ) : (
           Object.entries(grouped).map(([zone, entries]) => (
@@ -400,6 +492,7 @@ export function DamageSimulator() {
   const [descPrompt, setDescPrompt] = useState<{ zone: ZoneId; severity: Exclude<Severity, "GRAY"> } | null>(null);
   const [canvasKey, setCanvasKey] = useState(0);
   const [contextLost, setContextLost] = useState(false);
+  const [scenarioLoading, setScenarioLoading] = useState(false);
 
   const handleClickZone = useCallback((zone: ZoneId, position: THREE.Vector3) => {
     setSelectedZone(zone);
@@ -433,6 +526,35 @@ export function DamageSimulator() {
   const handleRetryCanvas = useCallback(() => {
     setContextLost(false);
     setCanvasKey((k) => k + 1);
+  }, []);
+
+  const handleScenarioGenerate = useCallback(async (scenario: string) => {
+    setScenarioLoading(true);
+    try {
+      const res = await fetch("/api/simulate-scenario", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scenario }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? "Failed to simulate scenario");
+        return;
+      }
+      const newDamages: DamageEntry[] = (data.damages ?? []).map(
+        (d: { zone: ZoneId; severity: string; description: string }) => ({
+          id: crypto.randomUUID(),
+          zone: d.zone,
+          severity: d.severity as Exclude<Severity, "GRAY">,
+          description: d.description,
+        }),
+      );
+      setDamages((prev) => [...prev, ...newDamages]);
+    } catch (e: any) {
+      alert("Error: " + (e.message ?? "Network request failed"));
+    } finally {
+      setScenarioLoading(false);
+    }
   }, []);
 
   return (
@@ -551,6 +673,8 @@ export function DamageSimulator() {
         onClear={handleClear}
         selectedZone={selectedZone}
         onSelectZone={setSelectedZone}
+        onScenarioGenerate={handleScenarioGenerate}
+        scenarioLoading={scenarioLoading}
       />
     </div>
   );
