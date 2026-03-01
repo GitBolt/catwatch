@@ -59,6 +59,7 @@ class CatWatch:
         self._total_zones = 15
         self._viewer_count = 0
         self._latest_frame = None
+        self._flip = False
         self._lock = threading.Lock()
 
     @property
@@ -262,6 +263,14 @@ class CatWatch:
         self._mode = mode
         self.send({"type": "set_mode", "mode": mode})
 
+    def flip_camera(self, enabled=True):
+        """Rotate the camera feed 180 degrees.
+
+        Args:
+            enabled: True to flip, False to reset to normal orientation.
+        """
+        self._flip = enabled
+
     def send_sensor(self, data):
         """Send sensor telemetry (audio, IR, etc.) to the backend.
 
@@ -289,6 +298,8 @@ class CatWatch:
 
     def _encode_frame(self, frame):
         """Downscale, JPEG-encode, and pack into binary frame message."""
+        if self._flip:
+            frame = cv2.flip(frame, -1)
         h, w = frame.shape[:2]
         if w > STREAM_WIDTH:
             scale = STREAM_WIDTH / w

@@ -255,6 +255,15 @@ cw.set_mode("cat")   # switch to CAT equipment mode
 cw.set_mode("general")  # switch back to general
 ```
 
+### `cw.flip_camera(enabled=True)`
+
+Rotate the camera feed 180 degrees. Useful when the camera is mounted upside down on a drone.
+
+```python
+cw.flip_camera()        # enable 180° rotation
+cw.flip_camera(False)   # back to normal
+```
+
 ### `cw.send_sensor(data)`
 
 Send auxiliary sensor telemetry to enrich the AI analysis.
@@ -335,6 +344,7 @@ cw.connect(
     model="CAT 325",
     fleet_tag="site_alpha",
 )
+cw.flip_camera()  # if camera is mounted upside down
 
 print(f"Dashboard: {cw.dashboard_url}")
 
