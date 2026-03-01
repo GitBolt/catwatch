@@ -7,30 +7,35 @@ interface Props {
   coverage: number;
   totalZones: number;
   equipmentInfo: EquipmentInfo | null;
+  mode: string;
 }
 
 function formatZoneName(zone: string): string {
   return zone.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function ZonePanel({ zonesSeen, coverage, totalZones, equipmentInfo }: Props) {
-  const dynamicZones = equipmentInfo?.inspectable_zones ?? [];
+export function ZonePanel({ zonesSeen, coverage, totalZones, equipmentInfo, mode }: Props) {
+  const isCatMode = mode === "cat";
+
+  const dynamicZones = isCatMode ? (equipmentInfo?.inspectable_zones ?? []) : [];
   const allZoneNames = dynamicZones.length > 0
     ? dynamicZones
-    : [...zonesSeen]; // fallback: show only what's been discovered
+    : [...zonesSeen];
+
+  const title = isCatMode
+    ? (equipmentInfo ? "Inspection Checklist" : "Zone Coverage")
+    : "Detected Areas";
 
   return (
     <div className="card">
       <div style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h3 style={{ fontSize: 14, fontWeight: 600 }}>
-          {equipmentInfo ? "Inspection Checklist" : "Zone Coverage"}
-        </h3>
+        <h3 style={{ fontSize: 14, fontWeight: 600 }}>{title}</h3>
         <span style={{ fontSize: 12, color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>
-          {zonesSeen.size}/{totalZones || "?"} · {coverage}%
+          {zonesSeen.size}{isCatMode ? `/${totalZones || "?"}` : ""} · {coverage}%
         </span>
       </div>
 
-      {equipmentInfo && (
+      {isCatMode && equipmentInfo && (
         <div style={{ marginBottom: 10, fontSize: 12, color: "var(--amber)", fontWeight: 500 }}>
           {equipmentInfo.model_guess || equipmentInfo.equipment_type.replace(/_/g, " ")}
           {equipmentInfo.visible_text && (
@@ -41,12 +46,19 @@ export function ZonePanel({ zonesSeen, coverage, totalZones, equipmentInfo }: Pr
         </div>
       )}
 
+      {!isCatMode && allZoneNames.length === 0 && (
+        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+          Scanning environment...
+        </div>
+      )}
+
+      {isCatMode && allZoneNames.length === 0 && (
+        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+          Identifying equipment...
+        </div>
+      )}
+
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {allZoneNames.length === 0 && (
-          <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-            Identifying equipment...
-          </div>
-        )}
         {allZoneNames.map((zone) => {
           const seen = zonesSeen.has(zone);
           return (
@@ -59,8 +71,7 @@ export function ZonePanel({ zonesSeen, coverage, totalZones, equipmentInfo }: Pr
           );
         })}
 
-        {/* Show any VLM-discovered zones not in the equipment checklist */}
-        {dynamicZones.length > 0 && [...zonesSeen].filter((z) => !dynamicZones.includes(z)).length > 0 && (
+        {isCatMode && dynamicZones.length > 0 && [...zonesSeen].filter((z) => !dynamicZones.includes(z)).length > 0 && (
           <>
             <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6, marginBottom: 2 }}>
               Also detected

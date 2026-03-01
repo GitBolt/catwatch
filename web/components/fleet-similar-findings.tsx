@@ -55,11 +55,29 @@ export function FleetSimilarFindings({ unitSerial, findings }: Props) {
 
   return (
     <div>
-      <h2 style={{ marginBottom: 16, fontSize: 18, fontWeight: 600 }}>
-        Similar Findings Across Fleet
-      </h2>
+      <div style={{ marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>
+          Similar Findings Across Fleet
+        </h2>
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 600,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: "var(--amber)",
+            opacity: 0.7,
+            padding: "2px 6px",
+            borderRadius: "var(--radius-sm)",
+            border: "1px solid rgba(196, 162, 76, 0.2)",
+          }}
+        >
+          supermemory
+        </span>
+      </div>
       {loading && (
-        <div className="card" style={{ padding: 24, textAlign: "center", fontSize: 14, color: "var(--text-dim)" }}>
+        <div className="card" style={{ padding: 24, textAlign: "center", fontSize: 14, color: "var(--text-dim)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <span className="pulse" style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "var(--amber)" }} />
           Searching fleet memory...
         </div>
       )}

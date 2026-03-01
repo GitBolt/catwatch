@@ -37,6 +37,7 @@ export default async function DashboardPage() {
       </div>
 
       <div
+        className="stats-grid-4"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(4, 1fr)",

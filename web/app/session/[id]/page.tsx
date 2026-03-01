@@ -106,15 +106,17 @@ export default function LiveSessionPage() {
     );
   }
 
+  const hasMemory = unitProfile !== null;
+
   return (
     <div
       style={{
         display: "flex",
         height: "100vh",
         flexDirection: "column",
-        gap: 8,
+        gap: 6,
         background: "var(--bg)",
-        padding: 12,
+        padding: 10,
       }}
     >
       <TopBar
@@ -127,8 +129,8 @@ export default function LiveSessionPage() {
         onModeChange={handleModeChange}
       />
 
-      <div style={{ display: "flex", minHeight: 0, flex: 1, gap: 12 }}>
-        {/* Video + Overlay */}
+      <div style={{ display: "flex", minHeight: 0, flex: 1, gap: 10 }}>
+        {/* Video + Overlay + Voice */}
         <div
           style={{
             position: "relative",
@@ -148,6 +150,7 @@ export default function LiveSessionPage() {
             width={canvasSize.width}
             height={canvasSize.height}
           />
+
           {!connected && !hasFrame && (
             <div
               style={{
@@ -162,15 +165,67 @@ export default function LiveSessionPage() {
               Waiting for drone feed...
             </div>
           )}
+
+          {/* Voice button — bottom left */}
+          <div style={{ position: "absolute", bottom: 16, left: 16, zIndex: 10 }}>
+            <VoiceButton onAudio={sendAudio} voiceAnswer={voiceAnswer} />
+          </div>
+
+          {/* Voice answer overlay */}
+          {voiceAnswer && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: 72,
+                left: 16,
+                right: 16,
+                background: "rgba(0,0,0,0.8)",
+                backdropFilter: "blur(8px)",
+                borderRadius: "var(--radius)",
+                padding: "10px 14px",
+                fontSize: 13,
+                color: "var(--text)",
+                lineHeight: 1.5,
+                zIndex: 10,
+                maxHeight: 120,
+                overflow: "auto",
+              }}
+            >
+              {voiceAnswer}
+            </div>
+          )}
+
+          {/* End inspection — bottom right */}
+          <div style={{ position: "absolute", bottom: 16, right: 16, zIndex: 10 }}>
+            {confirmEnd ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", borderRadius: "var(--radius)", padding: "6px 10px" }}>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>End?</span>
+                <button onClick={() => { endSession(); setConfirmEnd(false); }} className="btn btn-danger btn-small">
+                  Yes
+                </button>
+                <button onClick={() => setConfirmEnd(false)} className="btn btn-secondary btn-small">
+                  No
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmEnd(true)}
+                className="btn btn-small"
+                style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)", color: "var(--text-muted)", border: "1px solid rgba(255,255,255,0.1)" }}
+              >
+                End
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Right sidebar */}
         <div
           style={{
             display: "flex",
-            width: 288,
+            width: 260,
             flexDirection: "column",
-            gap: 12,
+            gap: 8,
             overflowY: "auto",
           }}
         >
@@ -183,43 +238,10 @@ export default function LiveSessionPage() {
             profile={unitProfile}
             loading={unitProfileLoading}
           />
-          <AnalysisPanel analysis={analysis} zoneTrends={zoneTrends} />
+          <AnalysisPanel analysis={analysis} zoneTrends={zoneTrends} hasMemoryContext={hasMemory} />
           {insights.length > 0 && <InsightsPanel insights={insights} />}
-          <ZonePanel zonesSeen={zonesSeen} coverage={coverage} totalZones={totalZones || 15} equipmentInfo={equipmentInfo} />
-          <FindingsList findings={findings} />
-        </div>
-      </div>
-
-      {/* Bottom bar */}
-      <div
-        className="card"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "8px 16px",
-          background: "rgba(15, 15, 18, 0.8)",
-          backdropFilter: "blur(12px)",
-        }}
-      >
-        <VoiceButton onAudio={sendAudio} voiceAnswer={voiceAnswer} />
-
-        <div style={{ marginLeft: "auto" }}>
-          {confirmEnd ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>End inspection?</span>
-              <button onClick={() => { endSession(); setConfirmEnd(false); }} className="btn btn-danger btn-small">
-                Confirm
-              </button>
-              <button onClick={() => setConfirmEnd(false)} className="btn btn-secondary btn-small">
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <button onClick={() => setConfirmEnd(true)} className="btn btn-danger btn-small">
-              End Inspection
-            </button>
-          )}
+          <ZonePanel zonesSeen={zonesSeen} coverage={coverage} totalZones={totalZones || 15} equipmentInfo={equipmentInfo} mode={mode} />
+          <FindingsList findings={findings} hasMemoryContext={hasMemory} />
         </div>
       </div>
     </div>

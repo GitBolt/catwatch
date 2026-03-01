@@ -1,7 +1,6 @@
 "use client";
 
 import type { UnitProfile } from "@/hooks/use-session-socket";
-import { SEVERITY_COLORS } from "@/lib/constants";
 
 interface Props {
   unitSerial: string | null;
@@ -17,125 +16,72 @@ export function UnitHistoryPanel({ unitSerial, unitModel, fleetTag, location, me
   if (!memoryKey) return null;
 
   const isGeo = memoryKey.startsWith("geo:");
-  const isLocation = !unitSerial && (location || isGeo);
-  const title = isLocation ? "Site Memory" : "Unit Memory";
 
-  let subtitle = memoryKey;
+  let label = memoryKey;
   if (unitSerial) {
-    subtitle = unitSerial;
+    label = unitSerial;
   } else if (location) {
-    subtitle = location;
+    label = location;
   } else if (isGeo) {
-    subtitle = `Near ${memoryKey.replace("geo:", "")}`;
+    label = `Near ${memoryKey.replace("geo:", "")}`;
   }
+
+  const pastCount = profile?.searchResults?.results.length ?? 0;
+  const factCount = (profile?.profile.static.length ?? 0) + (profile?.profile.dynamic.length ?? 0);
+  const hasHistory = pastCount > 0 || factCount > 0;
 
   return (
     <div
       style={{
         borderRadius: "var(--radius)",
-        border: "1px solid var(--border)",
-        padding: 16,
-        background: "var(--bg-card)",
+        border: hasHistory ? "1px solid rgba(196, 162, 76, 0.3)" : "1px solid var(--border)",
+        padding: "8px 12px",
+        background: hasHistory ? "rgba(196, 162, 76, 0.03)" : "var(--bg-card)",
+        transition: "border-color 0.3s ease",
       }}
     >
-      <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-        <span
-          style={{
-            display: "inline-block",
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: profile ? "var(--amber)" : "var(--text-dim)",
-          }}
-        />
-        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
-          {title}
+      {/* Top row: identity + supermemory badge */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 6v6l4 2" />
+          </svg>
+          <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: "var(--amber)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {label}
+          </span>
+          {unitModel && (
+            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>{unitModel}</span>
+          )}
+        </div>
+        <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--amber)", opacity: 0.5, flexShrink: 0 }}>
+          supermemory
         </span>
       </div>
 
-      <div style={{ marginBottom: 12, fontSize: 12, color: "var(--text-dim)" }}>
-        <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: "var(--amber)" }}>
-          {subtitle}
-        </div>
-        {unitModel && <div style={{ marginTop: 2 }}>{unitModel}</div>}
-        {fleetTag && <div style={{ marginTop: 2 }}>Fleet: {fleetTag}</div>}
+      {/* Status line */}
+      <div style={{ marginTop: 4, fontSize: 11, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6 }}>
+        {loading && (
+          <>
+            <span className="pulse" style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: "var(--amber)", flexShrink: 0 }} />
+            <span>Searching memory...</span>
+          </>
+        )}
+        {!loading && !profile && (
+          <span>First inspection — building memory</span>
+        )}
+        {!loading && profile && !hasHistory && (
+          <span>Memory connected · no prior findings</span>
+        )}
+        {!loading && hasHistory && (
+          <>
+            <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: "var(--amber)", flexShrink: 0 }} />
+            <span style={{ color: "var(--amber)", fontWeight: 500 }}>
+              Comparing against {pastCount > 0 ? `${pastCount} past finding${pastCount !== 1 ? "s" : ""}` : `${factCount} memory note${factCount !== 1 ? "s" : ""}`}
+            </span>
+          </>
+        )}
       </div>
-
-      {loading && (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>
-          Loading {isLocation ? "site" : "unit"} history...
-        </div>
-      )}
-
-      {!loading && !profile && (
-        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-          No prior inspection history.
-        </div>
-      )}
-
-      {profile && (
-        <>
-          {profile.profile.static.length > 0 && (
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                History
-              </div>
-              <ul style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {profile.profile.static.map((fact, i) => (
-                  <li key={i} style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.4 }}>
-                    {fact}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {profile.profile.dynamic.length > 0 && (
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Recent
-              </div>
-              <ul style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {profile.profile.dynamic.map((item, i) => (
-                  <li key={i} style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.4 }}>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {profile.searchResults && profile.searchResults.results.length > 0 && (
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Past Findings
-              </div>
-              <ul style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {profile.searchResults.results.slice(0, 5).map((r) => {
-                  const text = r.memory || r.chunk || "";
-                  const severityMatch = text.match(/^\[(RED|YELLOW|GREEN)\]/);
-                  const severity = severityMatch?.[1] as keyof typeof SEVERITY_COLORS | undefined;
-                  const colors = severity ? SEVERITY_COLORS[severity] : null;
-                  return (
-                    <li
-                      key={r.id}
-                      style={{
-                        fontSize: 12,
-                        color: "var(--text-muted)",
-                        lineHeight: 1.4,
-                        paddingLeft: 8,
-                        borderLeft: colors ? `2px solid ${colors.border}` : "2px solid var(--border)",
-                      }}
-                    >
-                      {text.length > 120 ? text.slice(0, 120) + "..." : text}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-        </>
-      )}
     </div>
   );
 }

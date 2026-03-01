@@ -7,18 +7,19 @@ import { SEVERITY_COLORS } from "@/lib/constants";
 interface Props {
   analysis: AnalysisData | null;
   zoneTrends: Record<string, ZoneTrend>;
+  hasMemoryContext?: boolean;
 }
 
 const ANALYSIS_TTL_MS = 12000;
 
 const DRIFT_LABELS: Record<string, { label: string; color: string }> = {
-  worsening: { label: "worsening", color: "var(--red, #ef4444)" },
-  improving: { label: "improving", color: "#4ade80" },
+  worsening: { label: "worsening", color: "var(--red, #b85c5c)" },
+  improving: { label: "improving", color: "#82b88a" },
   stable: { label: "stable", color: "var(--text-dim)" },
-  inconsistent: { label: "inconsistent", color: "var(--amber, #eab308)" },
+  inconsistent: { label: "inconsistent", color: "var(--amber, #b09340)" },
 };
 
-export function AnalysisPanel({ analysis, zoneTrends }: Props) {
+export function AnalysisPanel({ analysis, zoneTrends, hasMemoryContext }: Props) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -65,6 +66,26 @@ export function AnalysisPanel({ analysis, zoneTrends }: Props) {
           </span>
         )}
       </div>
+      {hasMemoryContext && (
+        <div style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
+          marginBottom: 6,
+          padding: "2px 8px",
+          borderRadius: "var(--radius-sm)",
+          background: "rgba(196, 162, 76, 0.08)",
+          border: "1px solid rgba(196, 162, 76, 0.15)",
+        }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 6v6l4 2" />
+          </svg>
+          <span style={{ fontSize: 10, fontWeight: 500, color: "var(--amber)", letterSpacing: "0.02em" }}>
+            Compared against prior inspections
+          </span>
+        </div>
+      )}
       <p style={{ fontSize: 13, color: "var(--text-muted)" }}>{analysis.description}</p>
       {analysis.findings.length > 0 && (
         <ul style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>

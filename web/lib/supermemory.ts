@@ -1,5 +1,10 @@
 const API_BASE = "https://api.supermemory.ai";
 
+/** Supermemory containerTag only allows alphanumeric, hyphens, underscores. */
+function sanitizeTag(tag: string): string {
+  return tag.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
 function getApiKey() {
   const key = process.env.SUPERMEMORY_API_KEY;
   if (!key) throw new Error("SUPERMEMORY_API_KEY not set");
@@ -62,7 +67,7 @@ export async function addMemory(opts: {
 }): Promise<MemoryDocument> {
   return smFetch<MemoryDocument>("/v3/documents", {
     content: opts.content,
-    containerTag: opts.containerTag,
+    containerTag: sanitizeTag(opts.containerTag),
     customId: opts.customId,
     metadata: opts.metadata,
   });
@@ -77,7 +82,7 @@ export async function searchMemories(opts: {
 }): Promise<SearchResponse> {
   return smFetch<SearchResponse>("/v4/search", {
     q: opts.query,
-    containerTag: opts.containerTag,
+    containerTag: opts.containerTag ? sanitizeTag(opts.containerTag) : undefined,
     searchMode: "hybrid",
     limit: opts.limit ?? 10,
   });
@@ -90,7 +95,7 @@ export async function getUnitProfile(opts: {
   query?: string;
 }): Promise<UnitProfile> {
   return smFetch<UnitProfile>("/v4/profile", {
-    containerTag: opts.containerTag,
+    containerTag: sanitizeTag(opts.containerTag),
     q: opts.query,
   });
 }

@@ -53,106 +53,59 @@ export default async function InspectionDetailPage({
       : null,
   };
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <Link
-          href="/dashboard/inspections"
-          style={{ fontSize: 14, color: "var(--text-muted)" }}
-        >
-          Inspections
-        </Link>
-        <span style={{ color: "var(--text-dim)" }}>/</span>
-        <h1 className="mono" style={{ fontSize: 20, fontWeight: 700, color: "var(--amber)" }}>
-          {inspectionSession.id.slice(0, 8)}
-        </h1>
-        <span
-          className={
-            inspectionSession.status === "active"
-              ? "badge badge-green"
-              : "badge badge-gray"
-          }
-        >
-          {inspectionSession.status}
-        </span>
-      </div>
+  const redCount = inspectionSession.findings.filter((f) => f.rating === "RED").length;
+  const yellowCount = inspectionSession.findings.filter((f) => f.rating === "YELLOW").length;
+  const greenCount = inspectionSession.findings.filter((f) => f.rating === "GREEN").length;
 
-      {/* Metadata */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
-        <MetaCard
-          label="Date"
-          value={new Date(inspectionSession.createdAt).toLocaleDateString()}
-        />
-        <MetaCard label="Mode" value={inspectionSession.mode} />
-        <MetaCard
-          label="Duration"
-          value={duration !== null ? `${duration} min` : "In progress"}
-        />
-        <MetaCard
-          label="Coverage"
-          value={`${Math.round(inspectionSession.coveragePct)}%`}
-        />
-      </div>
-      {inspectionSession.unitSerial && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-          <MetaCard label="Unit Serial" value={inspectionSession.unitSerial} />
-          {inspectionSession.model && (
-            <MetaCard label="Model" value={inspectionSession.model} />
-          )}
-          {inspectionSession.fleetTag && (
-            <MetaCard label="Fleet" value={inspectionSession.fleetTag} />
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Link href="/dashboard/inspections" style={{ fontSize: 13, color: "var(--text-dim)" }}>
+            Inspections
+          </Link>
+          <span style={{ color: "var(--text-dim)", fontSize: 13 }}>/</span>
+          <h1 className="mono" style={{ fontSize: 18, fontWeight: 700, color: "var(--amber)", margin: 0 }}>
+            {inspectionSession.id.slice(0, 8)}
+          </h1>
+          <span className={inspectionSession.status === "active" ? "badge badge-green" : "badge badge-gray"}>
+            {inspectionSession.status}
+          </span>
+        </div>
+        <div className="header-meta" style={{ display: "flex", gap: 16, fontSize: 13, color: "var(--text-muted)" }}>
+          <span>{new Date(inspectionSession.createdAt).toLocaleDateString()}</span>
+          <span style={{ textTransform: "capitalize" }}>{inspectionSession.mode}</span>
+          <span>{duration !== null ? `${duration} min` : "Active"}</span>
+          <span>{Math.round(inspectionSession.coveragePct)}% coverage</span>
+          {inspectionSession.unitSerial && (
+            <span className="mono" style={{ color: "var(--amber)" }}>{inspectionSession.unitSerial}</span>
           )}
         </div>
-      )}
+      </div>
 
-      {/* Findings */}
-      <div>
-        <h2 style={{ marginBottom: 16, fontSize: 18, fontWeight: 600 }}>
-          Findings ({inspectionSession.findings.length})
-        </h2>
-        {inspectionSession.findings.length === 0 ? (
-          <div
-            className="card"
-            style={{ padding: 24, textAlign: "center", fontSize: 14, color: "var(--text-dim)" }}
-          >
-            No findings recorded.
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {inspectionSession.findings.map((f) => {
-              const sev = f.rating as keyof typeof SEVERITY_COLORS;
-              const colors = SEVERITY_COLORS[sev] || SEVERITY_COLORS.GRAY;
-              const zoneLabel =
-                ZONE_LABELS[f.zone as ZoneId] || f.zone;
-              return (
-                <div
-                  key={f.id}
-                  className="finding-row"
-                  style={{
-                    borderRadius: "var(--radius)",
-                    border: `1px solid ${colors.border}`,
-                    padding: 16,
-                    background: colors.bg,
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>
-                      {f.rating}
-                    </span>
-                    <span style={{ fontSize: 14, color: "var(--text-muted)" }}>{zoneLabel}</span>
-                    <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-dim)" }}>
-                      {new Date(f.createdAt).toLocaleTimeString()}
-                    </span>
-                  </div>
-                  <p style={{ marginTop: 4, fontSize: 14, color: "var(--text-muted)" }}>{f.description}</p>
-                </div>
-              );
-            })}
+      {/* Summary strip */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <SeverityChip label="RED" count={redCount} color={SEVERITY_COLORS.RED} />
+          <SeverityChip label="YEL" count={yellowCount} color={SEVERITY_COLORS.YELLOW} />
+          <SeverityChip label="GRN" count={greenCount} color={SEVERITY_COLORS.GREEN} />
+        </div>
+        <span style={{ fontSize: 13, color: "var(--text-dim)" }}>
+          {inspectionSession.zonesSeen} zones · {inspectionSession.findings.length} findings
+        </span>
+        {inspectionSession.unitSerial && (
+          <div style={{ fontSize: 13 }}>
+            <span className="mono" style={{ color: "var(--amber)", fontWeight: 600 }}>{inspectionSession.unitSerial}</span>
+            {inspectionSession.model && <span style={{ color: "var(--text-dim)", marginLeft: 8 }}>{inspectionSession.model}</span>}
           </div>
         )}
       </div>
 
-      {/* Fleet similar findings */}
+      {/* Report — full width */}
+      <ReportPreview inspection={inspectionData} />
+
+      {/* Fleet findings */}
       <FleetSimilarFindings
         unitSerial={inspectionSession.unitSerial ?? null}
         findings={inspectionSession.findings.map((f) => ({
@@ -161,18 +114,37 @@ export default async function InspectionDetailPage({
           description: f.description,
         }))}
       />
-
-      {/* Report — PDF preview + download */}
-      <ReportPreview inspection={inspectionData} />
     </div>
   );
 }
 
-function MetaCard({ label, value }: { label: string; value: string }) {
+function SeverityChip({
+  label,
+  count,
+  color,
+}: {
+  label: string;
+  count: number;
+  color: { bg: string; border: string; text: string };
+}) {
   return (
-    <div className="card" style={{ padding: 12 }}>
-      <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{label}</div>
-      <div style={{ marginTop: 4, fontSize: 14, fontWeight: 500, textTransform: "capitalize" }}>{value}</div>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "4px 10px",
+        borderRadius: 6,
+        background: count > 0 ? color.bg : "transparent",
+        border: `1px solid ${count > 0 ? color.border : "var(--border)"}`,
+      }}
+    >
+      <span style={{ fontSize: 16, fontWeight: 700, color: count > 0 ? color.text : "var(--text-dim)" }}>
+        {count}
+      </span>
+      <span style={{ fontSize: 11, fontWeight: 500, color: count > 0 ? color.text : "var(--text-dim)" }}>
+        {label}
+      </span>
     </div>
   );
 }

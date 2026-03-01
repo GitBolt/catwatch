@@ -132,8 +132,10 @@ export function useSessionSocket(sessionId: string | null): SessionState {
 
   const profileFetchedRef = useRef<string | null>(null);
   const geoAttemptedRef = useRef(false);
+  const memoryKeyRef = useRef<string | null>(null);
 
   const memoryKey = unitSerial || location || geoKey;
+  memoryKeyRef.current = memoryKey;
 
   const send = useCallback((msg: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -193,7 +195,6 @@ export function useSessionSocket(sessionId: string | null): SessionState {
     let reconnectTimer: ReturnType<typeof setTimeout>;
     let backoff = 2000;
     let stopped = false;
-    let currentMemoryKey: string | null = null;
 
     function connect() {
       if (stopped) return;
@@ -248,11 +249,11 @@ export function useSessionSocket(sessionId: string | null): SessionState {
 
           case "analysis":
             setAnalysis(msg.data);
-            if (currentMemoryKey && msg.data.findings) {
+            if (memoryKeyRef.current && msg.data.findings) {
               for (const f of msg.data.findings) {
                 if (typeof f === "string" && f.trim()) {
                   storeMemory(
-                    currentMemoryKey,
+                    memoryKeyRef.current,
                     f,
                     msg.data.zone ?? "unknown",
                     msg.data.severity,
@@ -299,24 +300,18 @@ export function useSessionSocket(sessionId: string | null): SessionState {
 
           case "report":
             setReport(msg.data as Record<string, unknown>);
-            if (currentMemoryKey) {
-              storeReport(currentMemoryKey, msg.data);
+            if (memoryKeyRef.current) {
+              storeReport(memoryKeyRef.current, msg.data);
             }
             break;
 
           case "session_state":
             backoff = 2000;
             setMode(msg.mode);
-            if (msg.unit_serial) {
-              setUnitSerial(msg.unit_serial);
-              currentMemoryKey = msg.unit_serial;
-            }
+            if (msg.unit_serial) setUnitSerial(msg.unit_serial);
             if (msg.unit_model) setUnitModel(msg.unit_model);
             if (msg.fleet_tag) setFleetTag(msg.fleet_tag);
-            if (msg.location) {
-              setLocation(msg.location);
-              if (!currentMemoryKey) currentMemoryKey = msg.location;
-            }
+            if (msg.location) setLocation(msg.location);
             break;
 
           case "session_ended":

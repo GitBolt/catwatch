@@ -9,9 +9,10 @@ function formatZone(zone: string): string {
 
 interface Props {
   findings: FindingData[];
+  hasMemoryContext?: boolean;
 }
 
-export function FindingsList({ findings }: Props) {
+export function FindingsList({ findings, hasMemoryContext }: Props) {
   if (findings.length === 0) {
     return (
       <div
@@ -31,6 +32,17 @@ export function FindingsList({ findings }: Props) {
     <div className="card">
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <h3 style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>Findings</h3>
+        {hasMemoryContext && findings.length > 0 && (
+          <span style={{
+            fontSize: 9,
+            fontWeight: 500,
+            color: "var(--amber)",
+            opacity: 0.6,
+            letterSpacing: "0.04em",
+          }}>
+            Stored to memory
+          </span>
+        )}
         <div style={{ display: "flex", gap: 6, fontSize: 11, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
           {redCount > 0 && (
             <span style={{ color: SEVERITY_COLORS.RED.text }}>{redCount} RED</span>

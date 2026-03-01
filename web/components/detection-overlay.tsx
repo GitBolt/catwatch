@@ -10,9 +10,9 @@ interface Props {
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
-  GREEN: "#22c55e",
-  YELLOW: "#eab308",
-  RED: "#ef4444",
+  GREEN: "#6a9e72",
+  YELLOW: "#b09340",
+  RED: "#b85c5c",
 };
 
 export function DetectionOverlay({ detections, width, height }: Props) {

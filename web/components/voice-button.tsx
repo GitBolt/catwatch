@@ -82,37 +82,53 @@ export function VoiceButton({ onAudio, voiceAnswer }: Props) {
   const micAvailable = mounted && !!navigator.mediaDevices?.getUserMedia;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <button
-        onClick={toggleRecording}
-        disabled={waiting || !micAvailable}
-        className={recording ? "btn pulse" : "btn btn-secondary"}
-        style={
-          recording
-            ? { background: "var(--red)", color: "#fff", flexShrink: 0 }
-            : { flexShrink: 0 }
-        }
+    <button
+      onClick={toggleRecording}
+      disabled={waiting || !micAvailable}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        width: recording ? "auto" : 48,
+        height: 48,
+        borderRadius: recording ? 24 : "50%",
+        padding: recording ? "0 20px" : 0,
+        border: "none",
+        cursor: waiting ? "wait" : "pointer",
+        background: recording
+          ? "var(--red)"
+          : "rgba(196, 162, 76, 0.9)",
+        color: recording ? "var(--text)" : "#1a1714",
+        backdropFilter: "blur(8px)",
+        boxShadow: recording
+          ? "0 0 20px rgba(184, 92, 92, 0.4)"
+          : "0 2px 12px rgba(0, 0, 0, 0.3)",
+        transition: "all 0.2s var(--ease-spring, ease)",
+        opacity: waiting ? 0.5 : 1,
+      }}
+      className={recording ? "pulse" : ""}
+    >
+      <svg
+        width={20}
+        height={20}
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
       >
-        <svg
-          style={{ width: 16, height: 16 }}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4M12 15a3 3 0 003-3V5a3 3 0 00-6 0v7a3 3 0 003 3z"
-          />
-        </svg>
-        {recording ? " Stop" : ""}
-      </button>
-      {waiting && (
-        <span className="mono" style={{ fontSize: 12, color: "var(--text-dim)" }}>
-          Processing...
-        </span>
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4M12 15a3 3 0 003-3V5a3 3 0 00-6 0v7a3 3 0 003 3z"
+        />
+      </svg>
+      {recording && (
+        <span style={{ fontSize: 13, fontWeight: 600 }}>Stop</span>
       )}
-    </div>
+      {waiting && (
+        <span style={{ fontSize: 11, fontWeight: 500 }}>...</span>
+      )}
+    </button>
   );
 }

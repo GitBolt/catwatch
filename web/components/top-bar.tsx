@@ -27,8 +27,8 @@ export function TopBar({
         alignItems: "center",
         justifyContent: "space-between",
         padding: "8px 16px",
-        background: "rgba(15, 15, 18, 0.8)",
-        backdropFilter: "blur(12px)",
+        background: "rgba(20, 19, 19, 0.85)",
+        backdropFilter: "blur(16px)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -76,7 +76,7 @@ export function TopBar({
               padding: "4px 12px",
               fontSize: 12,
               background: mode === "cat" ? "var(--amber)" : "transparent",
-              color: mode === "cat" ? "#000" : "var(--text-dim)",
+              color: mode === "cat" ? "#1a1714" : "var(--text-dim)",
             }}
           >
             CAT
