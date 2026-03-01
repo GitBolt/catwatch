@@ -146,11 +146,6 @@ export async function generateInspectionPDF(data: InspectionPDFData): Promise<js
     try { doc.addImage(logoB64, "PNG", margin, 2, 22, 22); } catch { /* skip */ }
   }
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.setTextColor(...BLACK);
-  doc.text("CATWATCH", margin + 25, 16);
-
   doc.setFontSize(14);
   doc.text("Equipment Inspection Report", pageWidth - margin, 12, { align: "right" });
 
