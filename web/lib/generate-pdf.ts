@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { ZONE_PART_NUMBERS, getPartSearchUrl, type ZoneId } from "./constants";
 
 export interface InspectionPDFData {
   sessionId: string;
@@ -278,16 +279,21 @@ export async function generateInspectionPDF(data: InspectionPDFData): Promise<js
       (a, b) => (CODE_ORDER[b[1].worst] || 0) - (CODE_ORDER[a[1].worst] || 0)
     );
 
+    const compPartUrls: string[] = [];
     const compRows = sortedComponents.map(([comp, info]) => {
       const style = getCodeStyle(info.worst);
       const remarks = info.descriptions.length > 0
         ? info.descriptions.join("; ").slice(0, 200)
         : info.worst === "Good" ? "No issues detected" : "";
+      const partNum = comp in ZONE_PART_NUMBERS ? ZONE_PART_NUMBERS[comp as ZoneId] : undefined;
+      const partUrl = info.worst !== "Good" && partNum ? getPartSearchUrl(partNum) : "";
+      compPartUrls.push(partUrl);
       return [
         { content: humanize(comp), styles: { fontStyle: "bold" as const } },
         { content: info.worst, styles: { fillColor: style.bg, textColor: style.text, fontStyle: "bold" as const, halign: "center" as const } },
         { content: `${info.count}`, styles: { halign: "center" as const } },
         { content: remarks, styles: {} },
+        { content: partUrl ? "" : "—", styles: {} },
       ];
     });
 
@@ -298,12 +304,27 @@ export async function generateInspectionPDF(data: InspectionPDFData): Promise<js
         { content: "STATUS", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
         { content: "#", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
         { content: "REMARKS", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
+        { content: "Part", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
       ]],
       body: compRows,
       theme: "grid",
       margin: { left: margin, right: margin },
       styles: { fontSize: 7.5, cellPadding: 2.5, lineColor: TABLE_BORDER, lineWidth: 0.3, textColor: BLACK },
-      columnStyles: { 0: { cellWidth: 38 }, 1: { cellWidth: 16, halign: "center" }, 2: { cellWidth: 10, halign: "center" }, 3: {} },
+      columnStyles: { 0: { cellWidth: 34 }, 1: { cellWidth: 14, halign: "center" }, 2: { cellWidth: 8, halign: "center" }, 3: {}, 4: { cellWidth: 22, halign: "center" } },
+      didDrawCell: (data) => {
+        if (data.section === "body" && data.column.index === 4) {
+          const url = compPartUrls[data.row.index];
+          if (url) {
+            const cell = data.cell;
+            const d = data.doc;
+            d.setFontSize(7);
+            d.setTextColor(0, 0, 200);
+            const txt = "View Part";
+            const txtW = d.getTextWidth(txt);
+            d.textWithLink(txt, cell.x + (cell.width - txtW) / 2, cell.y + cell.height / 2 + 1, { url });
+          }
+        }
+      },
     });
 
     y = (doc as any).lastAutoTable.finalY + 6;
@@ -316,17 +337,22 @@ export async function generateInspectionPDF(data: InspectionPDFData): Promise<js
     y = checkPage(doc, y, 20);
     y = sectionBand(doc, y, "Action Items — Fair & Poor Findings", margin, contentWidth);
 
+    const actionPartUrls: string[] = [];
     const actionRows = actionFindings
       .sort((a, b) => (CODE_ORDER[ratingToCode(b.rating)] || 0) - (CODE_ORDER[ratingToCode(a.rating)] || 0))
       .map((f) => {
         const code = ratingToCode(f.rating);
         const style = getCodeStyle(code);
         const priority = f.rating === "RED" ? "Immediate" : "Scheduled";
+        const partNum = f.zone && ZONE_PART_NUMBERS[f.zone as ZoneId];
+        const partUrl = partNum ? getPartSearchUrl(partNum) : "";
+        actionPartUrls.push(partUrl);
         return [
           { content: priority, styles: { fontStyle: "bold" as const, textColor: style.text } },
           { content: humanize(f.zone || "General"), styles: { fontStyle: "bold" as const } },
           { content: code, styles: { fillColor: style.bg, textColor: style.text, fontStyle: "bold" as const, halign: "center" as const } },
           { content: f.description, styles: {} },
+          { content: partUrl ? "" : "—", styles: {} },
         ];
       });
 
@@ -337,12 +363,27 @@ export async function generateInspectionPDF(data: InspectionPDFData): Promise<js
         { content: "Component", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
         { content: "STATUS", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
         { content: "Description / Action Required", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
+        { content: "Part", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
       ]],
       body: actionRows,
       theme: "grid",
       margin: { left: margin, right: margin },
       styles: { fontSize: 7.5, cellPadding: 2.5, lineColor: TABLE_BORDER, lineWidth: 0.3, textColor: BLACK },
-      columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 35 }, 2: { cellWidth: 16, halign: "center" }, 3: {} },
+      columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 30 }, 2: { cellWidth: 14, halign: "center" }, 3: {}, 4: { cellWidth: 22, halign: "center" } },
+      didDrawCell: (data) => {
+        if (data.section === "body" && data.column.index === 4) {
+          const url = actionPartUrls[data.row.index];
+          if (url) {
+            const cell = data.cell;
+            const d = data.doc;
+            d.setFontSize(7);
+            d.setTextColor(0, 0, 200);
+            const txt = "View Part";
+            const txtW = d.getTextWidth(txt);
+            d.textWithLink(txt, cell.x + (cell.width - txtW) / 2, cell.y + cell.height / 2 + 1, { url });
+          }
+        }
+      },
     });
 
     y = (doc as any).lastAutoTable.finalY + 6;
@@ -353,14 +394,20 @@ export async function generateInspectionPDF(data: InspectionPDFData): Promise<js
     y = checkPage(doc, y, 20);
     y = sectionBand(doc, y, "Complete Inspection Log", margin, contentWidth);
 
+    const logPartUrls: string[] = [];
     const allRows = data.findings.map((f) => {
       const code = ratingToCode(f.rating);
       const style = getCodeStyle(code);
+      const hasDefect = f.rating === "RED" || f.rating === "YELLOW";
+      const partNum = f.zone && ZONE_PART_NUMBERS[f.zone as ZoneId];
+      const partUrl = hasDefect && partNum ? getPartSearchUrl(partNum) : "";
+      logPartUrls.push(partUrl);
       return [
         formatTime(f.createdAt),
         { content: humanize(f.zone || "General"), styles: { fontStyle: "bold" as const } },
         { content: code, styles: { fillColor: style.bg, textColor: style.text, fontStyle: "bold" as const, halign: "center" as const } },
         f.description,
+        { content: partUrl ? "" : "—", styles: {} },
       ];
     });
 
@@ -371,12 +418,27 @@ export async function generateInspectionPDF(data: InspectionPDFData): Promise<js
         { content: "Component", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
         { content: "STATUS", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
         { content: "Remarks", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
+        { content: "Part", styles: { fillColor: LIGHT_GRAY, textColor: DARK_GRAY, fontStyle: "bold" } },
       ]],
       body: allRows,
       theme: "grid",
       margin: { left: margin, right: margin },
       styles: { fontSize: 7, cellPadding: 2, lineColor: TABLE_BORDER, lineWidth: 0.3, textColor: BLACK },
-      columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 34 }, 2: { cellWidth: 14, halign: "center" }, 3: {} },
+      columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 30 }, 2: { cellWidth: 12, halign: "center" }, 3: {}, 4: { cellWidth: 22, halign: "center" } },
+      didDrawCell: (data) => {
+        if (data.section === "body" && data.column.index === 4) {
+          const url = logPartUrls[data.row.index];
+          if (url) {
+            const cell = data.cell;
+            const d = data.doc;
+            d.setFontSize(7);
+            d.setTextColor(0, 0, 200);
+            const txt = "View Part";
+            const txtW = d.getTextWidth(txt);
+            d.textWithLink(txt, cell.x + (cell.width - txtW) / 2, cell.y + cell.height / 2 + 1, { url });
+          }
+        }
+      },
     });
 
     y = (doc as any).lastAutoTable.finalY + 6;
