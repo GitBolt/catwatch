@@ -1,12 +1,16 @@
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
+import { FindingsChart } from "@/components/findings-chart";
 
 export default async function DashboardPage() {
   const session = await getSession();
   if (!session) return null;
 
-  const [totalSessions, totalFindings, apiKeyCount, recentSessions] =
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const [totalSessions, totalFindings, apiKeyCount, recentSessions, sessionsForChart] =
     await Promise.all([
       prisma.session.count({ where: { userId: session.userId } }),
       prisma.finding.count({
@@ -19,14 +23,40 @@ export default async function DashboardPage() {
         take: 5,
         include: { _count: { select: { findings: true } } },
       }),
+      prisma.session.findMany({
+        where: {
+          userId: session.userId,
+          createdAt: { gte: thirtyDaysAgo },
+        },
+        include: { _count: { select: { findings: true } } },
+      }),
     ]);
 
-  const redFindings = await prisma.finding.count({
-    where: { session: { userId: session.userId }, rating: "RED" },
-  });
+  const findingsByDay = new Map<string, number>();
+  for (const s of sessionsForChart) {
+    const day = s.createdAt.toISOString().slice(0, 10);
+    findingsByDay.set(day, (findingsByDay.get(day) || 0) + s._count.findings);
+  }
+
+  const chartData: { date: string; label: string; findings: number }[] = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const label = d.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" });
+    chartData.push({
+      date: dateStr,
+      label,
+      findings: findingsByDay.get(dateStr) || 0,
+    });
+  }
+
+  const lastInspectionDate = recentSessions[0]
+    ? new Date(recentSessions[0].createdAt).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" })
+    : "—";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+    <div className="dashboard-overview" style={{ display: "flex", flexDirection: "column", gap: 32 }}>
       <div>
         <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>
           Dashboard
@@ -40,14 +70,13 @@ export default async function DashboardPage() {
         className="stats-grid-4"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
+          gridTemplateColumns: "repeat(3, 1fr)",
           gap: 16,
         }}
       >
         <StatCard label="Total Inspections" value={totalSessions} />
         <StatCard label="Total Findings" value={totalFindings} />
-        <StatCard label="Red Flags" value={redFindings} />
-        <StatCard label="API Keys" value={apiKeyCount} />
+        <StatCard label="Last Inspection" value={lastInspectionDate} />
       </div>
 
       {/* Quick-start guide if no sessions yet */}
@@ -66,8 +95,8 @@ export default async function DashboardPage() {
             <Step
               number={1}
               title="Create an API Key"
-              description="Go to API Keys and create a key to authenticate your drone's SDK connection."
-              link="/dashboard/keys"
+              description="Go to Settings and create a key to authenticate your drone's SDK connection."
+              link="/dashboard/settings"
               linkText="Create API Key →"
             />
             <Step
@@ -89,27 +118,35 @@ cw.run()'
         </div>
       )}
 
-      <div>
-        <div
-          style={{
-            marginBottom: 16,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <h2 style={{ fontSize: 18, fontWeight: 600 }}>
-            Recent Inspections
+      <div className="dashboard-two-col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, alignItems: "start" }}>
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
+            Findings per Day
           </h2>
-          <Link
-            href="/dashboard/inspections"
-            style={{ fontSize: 14, color: "var(--amber)" }}
-          >
-            View all
-          </Link>
+          <FindingsChart data={chartData} />
         </div>
 
-        {recentSessions.length === 0 ? (
+        <div>
+          <div
+            style={{
+              marginBottom: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <h2 style={{ fontSize: 18, fontWeight: 600 }}>
+              Recent Inspections
+            </h2>
+            <Link
+              href="/dashboard/inspections"
+              style={{ fontSize: 14, color: "var(--amber)" }}
+            >
+              View all
+            </Link>
+          </div>
+
+          {recentSessions.length === 0 ? (
           <div
             className="card"
             style={{
@@ -190,12 +227,13 @@ cw.run()'
             ))}
           </div>
         )}
+        </div>
       </div>
     </div>
   );
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="card stat-card">
       <div
@@ -203,7 +241,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
           fontSize: 28,
           fontWeight: 700,
           letterSpacing: "-0.03em",
-          fontVariantNumeric: "tabular-nums",
+          fontVariantNumeric: typeof value === "number" ? "tabular-nums" : undefined,
         }}
       >
         {value}

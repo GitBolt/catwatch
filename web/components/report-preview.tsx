@@ -5,6 +5,38 @@ import {
   generateInspectionPDF,
   type InspectionPDFData,
 } from "@/lib/generate-pdf";
+import { SEVERITY_COLORS } from "@/lib/constants";
+
+function FindingsChip({
+  label,
+  count,
+  color,
+}: {
+  label: string;
+  count: number;
+  color: { bg: string; border: string; text: string };
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "4px 10px",
+        borderRadius: 6,
+        background: count > 0 ? color.bg : "transparent",
+        border: `1px solid ${count > 0 ? color.border : "var(--border)"}`,
+      }}
+    >
+      <span style={{ fontSize: 16, fontWeight: 700, color: count > 0 ? color.text : "var(--text-dim)" }}>
+        {count}
+      </span>
+      <span style={{ fontSize: 11, fontWeight: 500, color: count > 0 ? color.text : "var(--text-dim)" }}>
+        {label}
+      </span>
+    </div>
+  );
+}
 
 interface Props {
   inspection: InspectionPDFData;
@@ -77,9 +109,13 @@ export function ReportPreview({ inspection }: Props) {
     URL.revokeObjectURL(url);
   }, [jsonString, inspection.sessionId]);
 
+  const redCount = inspection.findings.filter((f) => f.rating === "RED").length;
+  const yellowCount = inspection.findings.filter((f) => f.rating === "YELLOW").length;
+  const greenCount = inspection.findings.filter((f) => f.rating === "GREEN").length;
+
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", marginBottom: 24, gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <h2 style={{ fontSize: 18, fontWeight: 600 }}>Report</h2>
           <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)" }}>
@@ -115,7 +151,16 @@ export function ReportPreview({ inspection }: Props) {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
+          <FindingsChip label="RED" count={redCount} color={SEVERITY_COLORS.RED} />
+          <FindingsChip label="YEL" count={yellowCount} color={SEVERITY_COLORS.YELLOW} />
+          <FindingsChip label="GRN" count={greenCount} color={SEVERITY_COLORS.GREEN} />
+          <span style={{ fontSize: 13, color: "var(--text-dim)" }}>
+            {inspection.findings.length} findings
+          </span>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           {viewMode === "json" && (
             <>
               <button onClick={copyJson} className="btn" style={{ gap: 6, fontSize: 12 }}>
@@ -156,8 +201,8 @@ export function ReportPreview({ inspection }: Props) {
               title="Inspection Report PDF"
               style={{
                 width: "100%",
-                height: "85vh",
-                minHeight: 700,
+                height: "calc(100vh - 220px)",
+                minHeight: 600,
                 borderRadius: "var(--radius)",
                 border: "1px solid var(--border)",
                 background: "#fff",
