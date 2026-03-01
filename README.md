@@ -26,7 +26,7 @@ pip install catwatch
 from catwatch import CatWatch
 
 cw = CatWatch(api_key="cw_live_YOUR_KEY")
-cw.connect(source=0, mode="cat")
+cw.connect(source=0, mode="797")
 print(f"Dashboard: {cw.dashboard_url}")
 cw.run()
 ```
@@ -60,8 +60,8 @@ Only one inspection runs at a time per user. Starting a new session automaticall
 Pass identity so the AI remembers past inspections of the same unit or site:
 
 ```python
-# CAT mode — equipment serial
-cw.connect(source=0, mode="cat", unit_serial="797F-001", model="CAT 797F", fleet_tag="fleet_alpha")
+# 797 mode — CAT 797F defect inspection
+cw.connect(source=0, mode="797", unit_serial="797F-001", model="CAT 797F", fleet_tag="fleet_alpha")
 
 # General mode — site name
 cw.connect(source=0, mode="general", location="warehouse-7B")
@@ -155,7 +155,7 @@ cam.configure(cam.create_video_configuration(main={"size": (1280, 720)}))
 cam.start()
 
 cw = CatWatch(api_key="cw_live_YOUR_KEY")
-cw.connect(source=cam, mode="cat", unit_serial="DRONE-PI-001")
+cw.connect(source=cam, mode="797", unit_serial="DRONE-PI-001")
 cw.run()
 ```
 

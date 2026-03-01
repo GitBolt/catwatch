@@ -121,6 +121,15 @@ async def end_session(session_id: str, zones_seen: int = 0, coverage_pct: float 
     )
 
 
+async def update_session_location(session_id: str, location: str):
+    """Set the location for a session."""
+    pool = await get_pool()
+    await pool.execute(
+        'UPDATE "Session" SET location = $2 WHERE id = $1',
+        session_id, location,
+    )
+
+
 async def close_active_sessions_for_user(user_id: str):
     """Close all active sessions for a user. Returns list of closed session IDs."""
     pool = await get_pool()

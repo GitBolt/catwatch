@@ -172,66 +172,46 @@ def _condensed_zone_criteria(zone_id):
     return block
 
 
-def build_zone_inspection_prompt(zone_id, mode="cat", equipment_info=None):
+def build_zone_inspection_prompt(zone_id, mode="797", equipment_info=None):
     """Construct a (persona, schema) tuple with zone-specific criteria.
 
-    - If zone_id is known and mode is "cat", injects condensed RED/YELLOW/GREEN
-      criteria and SMCS codes so the VLM applies the correct methodology.
-    - Uses equipment_info (from auto-ID) to contextualize the inspection.
-    - Falls back to generic personas when zone is unknown or mode is "general".
+    - In 797 mode, inject zone-specific heavy-equipment defect criteria.
+    - In general mode, use strict workplace safety inspection prompts.
     """
-    if mode == "797":
-        criteria = _797_ZONE_CRITERIA.get(zone_id)
-        if criteria:
-            zone_block = (
-                f"ZONE FOCUS: {zone_id} — {criteria['focus']}\n"
-                f"RED: {criteria['red']}\n"
-                f"YELLOW: {criteria['yellow']}\n"
-                f"GREEN: {criteria['green']}\n"
-                "False positives to avoid: dirt/debris obscuring condition, "
-                "lighting shadows, normal operational clearances."
-            )
-            persona = f"{CAT_797_INSPECTION_PERSONA}\n\n--- Inspection Criteria ---\n{zone_block}"
-        else:
-            persona = CAT_797_INSPECTION_PERSONA
-        return persona, CAT_797_OUTPUT_SCHEMA
-
-    if mode != "cat":
+    if mode != "797":
         return GENERAL_SCENE_PERSONA, GENERAL_OUTPUT_SCHEMA
 
-    zone_block = _condensed_zone_criteria(zone_id) if zone_id else ""
-
-    persona = CAT_INSPECTION_PERSONA
-    if equipment_info:
-        equip_type = equipment_info.get("equipment_type", "unknown")
-        model = equipment_info.get("model_guess", "")
-        if model:
-            persona += f"\nEquipment identified: {model} ({equip_type})."
-        zones_list = equipment_info.get("inspectable_zones", [])
-        if zones_list:
-            persona += f"\nInspectable zones for this unit: {', '.join(zones_list)}."
-
-    if zone_block:
-        persona = f"{persona}\n\n--- CATrack Inspection Criteria ---\n{zone_block}"
-
-    schema = VLM_OUTPUT_SCHEMA + "\n\n" + SMCS_CONTEXT
-    return persona, schema
+    criteria = _797_ZONE_CRITERIA.get(zone_id)
+    if criteria:
+        zone_block = (
+            f"ZONE FOCUS: {zone_id} — {criteria['focus']}\n"
+            f"RED: {criteria['red']}\n"
+            f"YELLOW: {criteria['yellow']}\n"
+            f"GREEN: {criteria['green']}\n"
+            "False positives to avoid: dirt/debris obscuring condition, "
+            "lighting shadows, normal operational clearances."
+        )
+        persona = f"{CAT_797_INSPECTION_PERSONA}\n\n--- Inspection Criteria ---\n{zone_block}"
+    else:
+        persona = CAT_797_INSPECTION_PERSONA
+    return persona, CAT_797_OUTPUT_SCHEMA
 
 
 GENERAL_SCENE_PERSONA = """\
-You are a safety inspector for workplaces and field operations.
-Describe what is actually visible in the current frame. Focus on safety:
-missing PPE, trip hazards, blocked exits, unguarded machinery, unstable loads,
-electrical hazards, fire risks, chemical exposure, fall risks, poor ergonomics.
+You are a workplace safety inspection copilot.
+Your job is NOT to provide general commentary. Only report safety risks,
+inspection-relevant observations, and required actions.
+
+Focus on: missing PPE, trip/slip hazards, blocked exits, unguarded machinery,
+electrical hazards, fire risks, unstable loads, chemical exposure, fall risks,
+unsafe posture/ergonomics, and housekeeping violations.
 
 Severity rules:
-- RED: immediate danger to life — unguarded blade, active fall risk, missing PPE near hazard
-- YELLOW: safety concern that needs attention — cluttered walkway, improperly stored materials
-- GREEN: area appears safe and well-maintained, no hazards observed
+- RED: immediate danger to life or severe injury risk
+- YELLOW: safety concern that requires corrective action
+- GREEN: no meaningful safety issues visible
 
-Be strict. If someone is operating a power tool without safety gear, that is RED, not GREEN.
-If a workspace has trip hazards, that is YELLOW at minimum.
-Only use GREEN when the area is genuinely safe.
+Be strict and practical. Do not write vague scene descriptions.
 """
 
 GENERAL_OUTPUT_SCHEMA = """
@@ -359,11 +339,15 @@ RED: Active failure, major structural damage, safety hazard, or fluid leak under
 # ── CAT 797 haul truck prompts ────────────────────────────────────────────────
 
 CAT_797_INSPECTION_PERSONA = """\
-You are a pre-shift inspector on a CAT 797 haul truck. Your job is to identify \
-leaks, damage, wear, and anything that would ground the unit before shift start. \
-Use the language of a real field inspector: concise, specific, actionable. \
-If no haul truck is visible, describe the scene honestly and set severity GREEN. \
-Never fabricate equipment that is not in the image.\
+You are a pre-shift defect inspector for CAT 797F haul trucks.
+Only inspect CAT 797F components and report defects: leaks, cracks, deformation,
+missing hardware, severe wear, overheating indicators, and safety-critical issues.
+
+Rules:
+- If a CAT 797F is visible: inspect only truck defects and risks.
+- Ignore unrelated objects/people/background unless they create a direct safety risk to inspection.
+- If no CAT 797F is visible: return GREEN with findings=[] and callout="No 797F visible".
+- Never fabricate defects or components not visible in the frame.
 """
 
 _797_ZONE_CRITERIA = {
@@ -421,10 +405,10 @@ CAT_797_OUTPUT_SCHEMA = """
 Analyze this frame. Respond in valid JSON with these exact keys:
 - description: what you see in 1-2 sentences (be specific and honest)
 - severity: GREEN / YELLOW / RED
-- findings: array of specific observations (max 3), empty if nothing notable
-- callout: the single most notable thing in 4-5 words (spoken aloud). If nothing changed, use "Scene normal"
+- findings: array of defect observations only (max 3), empty if no defect
+- callout: short defect callout in 4-6 words; use "No 797F visible" if no truck in frame
 - confidence: 0.0 to 1.0
-- zone: inspection zone if equipment visible (undercarriage, engine, fluids, hydraulics, drivetrain, electrical, cab, structures) or null"""
+- component: primary inspected CAT 797F component (undercarriage, engine, fluids, hydraulics, drivetrain, electrical, cab, structures) or "none" if no truck visible"""
 
 
 REPORT_PROMPT = """\

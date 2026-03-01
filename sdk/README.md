@@ -1,6 +1,6 @@
 # CatWatch SDK
 
-AI-powered drone inspection SDK. Connect any camera to the CatWatch platform for real-time YOLO object detection, VLM analysis (Qwen 2.5-VL), fleet memory, and PDF report generation.
+AI-powered drone inspection SDK. Connect any camera to the CatWatch platform for real-time VLM analysis (Qwen 2.5-VL), fleet memory, and PDF report generation.
 
 ## Install
 
@@ -22,7 +22,7 @@ pip install catwatch[picamera]
 from catwatch import CatWatch
 
 cw = CatWatch("cw_live_YOUR_API_KEY")
-cw.connect(source=0, mode="cat", unit_serial="797F-001")
+cw.connect(source=0, mode="797", unit_serial="797F-001")
 
 @cw.on_analysis
 def handle(msg):
@@ -54,7 +54,7 @@ Create a session and connect to the inspection backend.
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
 | `source` | `int \| str \| Picamera2` | `0` | Camera index, video file path, RTSP URL, or Picamera2 object |
-| `mode` | `str` | `"general"` | `"general"` for open-ended inspection, `"cat"` for CAT equipment-specific |
+| `mode` | `str` | `"general"` | `"general"` for workplace safety inspection, `"797"` for CAT 797F defect inspection |
 | `unit_serial` | `str` | `None` | Equipment serial number — enables fleet memory across inspections |
 | `model` | `str` | `None` | Equipment model (e.g. `"CAT 797F"`) |
 | `fleet_tag` | `str` | `None` | Fleet group identifier for cross-unit pattern matching |
@@ -73,7 +73,7 @@ cw.connect(source="rtsp://192.168.1.10:8554/stream")
 from picamera2 import Picamera2
 cam = Picamera2()
 cam.start()
-cw.connect(source=cam, mode="cat", unit_serial="797F-007")
+cw.connect(source=cam, mode="797", unit_serial="797F-007")
 ```
 
 ---
@@ -102,7 +102,7 @@ Stop the inspection, close the WebSocket, and release the camera.
 
 ```python
 with CatWatch("cw_live_...") as cw:
-    cw.connect(source=0, mode="cat")
+    cw.connect(source=0, mode="797")
     cw.run()
 # camera and WebSocket released automatically
 ```
@@ -118,7 +118,7 @@ Read-only state accessible at any time after `connect()`:
 | `cw.session_id` | `str` | 12-character hex session ID |
 | `cw.dashboard_url` | `str` | URL to the live dashboard — share with the operator |
 | `cw.connected` | `bool` | `True` if WebSocket is open |
-| `cw.mode` | `str` | Current inspection mode (`"general"` or `"cat"`) |
+| `cw.mode` | `str` | Current inspection mode (`"general"` or `"797"`) |
 | `cw.zones_seen` | `frozenset` | Zone IDs detected so far |
 | `cw.coverage` | `int` | Coverage percentage (0–100) |
 | `cw.frame_count` | `int` | Total frames sent to backend |
@@ -251,8 +251,8 @@ cw.ask("Is there any visible damage on the dump body?")
 Switch inspection mode live. Raises `ValueError` if mode is invalid.
 
 ```python
-cw.set_mode("cat")   # switch to CAT equipment mode
-cw.set_mode("general")  # switch back to general
+cw.set_mode("797")      # switch to CAT 797F inspection mode
+cw.set_mode("general")  # switch to workplace safety mode
 ```
 
 ### `cw.flip_camera(enabled=True)`
@@ -305,7 +305,7 @@ cw.send({"type": "request_vlm_analysis"})
 When you pass `unit_serial` to `connect()`, the platform tracks inspection history for that unit across sessions using [Supermemory](https://supermemory.ai):
 
 ```python
-cw.connect(source=0, mode="cat", unit_serial="797F-001", fleet_tag="fleet_alpha")
+cw.connect(source=0, mode="797", unit_serial="797F-001", fleet_tag="fleet_alpha")
 ```
 
 On subsequent inspections of the same unit:
@@ -339,7 +339,7 @@ from catwatch import CatWatch
 cw = CatWatch("cw_live_YOUR_KEY")
 cw.connect(
     source=0,
-    mode="cat",
+    mode="797",
     unit_serial="797F-001",
     model="CAT 797F",
     fleet_tag="site_alpha",

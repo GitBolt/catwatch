@@ -65,15 +65,15 @@ interface SessionState {
 const BACKEND_WS = process.env.NEXT_PUBLIC_BACKEND_WS || "wss://heyaabis--dronecat-web.modal.run";
 
 /** Store a finding in Supermemory via our API route. Fire-and-forget. */
-function storeMemory(unitSerial: string, finding: string, zone: string, severity: string) {
+function storeMemory(unitSerial: string, finding: string, component: string, severity: string) {
   fetch("/api/memory", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       action: "store",
       unitSerial,
-      content: `[${severity}] Zone: ${zone} — ${finding}`,
-      metadata: { zone, severity, type: "finding", timestamp: new Date().toISOString() },
+      content: `[${severity}] Component: ${component} — ${finding}`,
+      metadata: { component, severity, type: "finding", timestamp: new Date().toISOString() },
     }),
   }).catch((e) => console.warn("[memory] store error:", e));
 }
@@ -196,6 +196,8 @@ export function useSessionSocket(sessionId: string | null): SessionState {
             const addr = data.address || {};
             const name = addr.building || addr.amenity || addr.road || addr.neighbourhood || addr.suburb || addr.city || fallback;
             setGeoKey(String(name));
+            setLocation(String(name));
+            send({ type: "set_location", location: String(name) });
           }
         } catch { /* keep coordinate fallback */ }
       },
@@ -270,7 +272,7 @@ export function useSessionSocket(sessionId: string | null): SessionState {
                   storeMemory(
                     memoryKeyRef.current,
                     f,
-                    msg.data.zone ?? "unknown",
+                    msg.data.component || msg.data.zone || "unknown",
                     msg.data.severity,
                   );
                 }

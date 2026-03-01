@@ -11,7 +11,6 @@ from datetime import datetime
 import modal
 
 from . import app, web_image
-from .yolo_detector import YoloDetector, YoloDetector797
 from .qwen_vl import Qwen25VLInspector
 
 VLM_ANALYSIS_INTERVAL_S = 3.0
@@ -155,8 +154,6 @@ def web():
         allow_headers=["*"],
     )
 
-    yolo = YoloDetector()
-    yolo797 = YoloDetector797()
     qwen = Qwen25VLInspector()
 
     @api.websocket("/ws")
@@ -173,6 +170,7 @@ def web():
         vlm_busy = False
         inspection_mode = "general"
         last_vlm_zone = None
+        equipment_id_done = False
 
         async def run_vlm_analysis(frame_b64, frame_id, frame_client_ts, triggered_by="cadence"):
             nonlocal vlm_busy, last_vlm_run_ts, last_vlm_zone
@@ -200,6 +198,9 @@ def web():
                 new_zone = analysis.get("component") or analysis.get("zone")
                 if new_zone:
                     last_vlm_zone = new_zone
+                    if new_zone not in seen_zones:
+                        seen_zones.add(new_zone)
+                        await ws.send_json({"type": "zone_first_seen", "zone": new_zone})
 
                 print(f"[VLM] Done frame {frame_id}: [{analysis.get('severity','?')}] {analysis.get('description', '')[:80]}")
                 await ws.send_json({
@@ -327,7 +328,7 @@ def web():
                 if inspection_mode == "797":
                     context = "You are inspecting a CAT 797F mining haul truck."
                 else:
-                    context = "You are a visual copilot for general scene and safety monitoring."
+                    context = "You are a workplace safety inspection copilot."
                 prompt = (
                     f"{context} The technician asks: \"{question}\""
                     "\nAnswer in one concise sentence based on the image."
@@ -344,56 +345,47 @@ def web():
             print(f"[VOICE A] {answer[:80]}")
             await ws.send_json({"type": "voice_answer", "text": answer, "mode": inspection_mode})
 
-        yolo_busy = False
+        analysis_busy = False
         pending_frame = None
 
-        async def process_yolo(frame_b64, frame_id, frame_client_ts):
-            nonlocal yolo_busy, pending_frame
+        async def process_frame(frame_b64, frame_id, frame_client_ts):
+            nonlocal analysis_busy, pending_frame, equipment_id_done
 
-            yolo_busy = True
+            analysis_busy = True
             try:
-                if inspection_mode == "797":
-                    result = await asyncio.to_thread(yolo797.detect.remote, frame_b64)
-                else:
-                    result = await asyncio.to_thread(yolo.detect.remote, frame_b64, inspection_mode)
-                detections = result.get("detections", [])
-                yolo_ms = result.get("yolo_ms", 0)
-
-                if inspection_mode == "797":
-                    from backend.zone_config import zone_from_label_797, zone_from_bbox_797
-                    _zone_fn = zone_from_label_797
-                    _bbox_fn = zone_from_bbox_797
-                else:
-                    from backend.zone_config import zone_from_label, zone_from_bbox
-                    _zone_fn = zone_from_label
-                    _bbox_fn = zone_from_bbox
-                zone_events = []
-                for det in detections:
-                    zone_id = _zone_fn(det["label"])
-                    if not zone_id:
-                        zone_id = _bbox_fn(det["bbox"])
-                    det["zone"] = zone_id
-                    if zone_id and zone_id not in seen_zones:
-                        seen_zones.add(zone_id)
-                        zone_events.append(zone_id)
-
+                # Qwen-only pipeline: keep detection stream shape for frontend compatibility.
                 await ws.send_json({
                     "type": "detection",
-                    "detections": detections,
+                    "detections": [],
                     "coverage": len(seen_zones),
-                    "total_zones": 8 if inspection_mode == "797" else 15,
+                    "total_zones": 8 if inspection_mode == "797" else 6,
                     "mode": inspection_mode,
-                    "yolo_ms": yolo_ms,
+                    "yolo_ms": 0,
                     "frame_id": frame_id,
                     "client_ts": frame_client_ts,
                     "server_ts": time.time(),
                 })
-                for zone_id in zone_events:
-                    await ws.send_json({"type": "zone_first_seen", "zone": zone_id})
+
+                # 797 mode: run equipment identification once from first valid frame.
+                if inspection_mode == "797" and latest_frame_b64 and not equipment_id_done:
+                    try:
+                        result = await asyncio.wait_for(
+                            asyncio.to_thread(qwen.identify_equipment.remote, latest_frame_b64),
+                            timeout=20,
+                        )
+                        zones = result.get("inspectable_zones", []) if isinstance(result, dict) else []
+                        if zones:
+                            for zid in zones:
+                                if zid not in seen_zones:
+                                    seen_zones.add(zid)
+                                    await ws.send_json({"type": "zone_first_seen", "zone": zid})
+                            await ws.send_json({"type": "equipment_identified", "data": result})
+                            equipment_id_done = True
+                    except Exception:
+                        pass
 
                 if (
-                    detections
-                    and not vlm_busy
+                    not vlm_busy
                     and latest_frame_b64
                     and (time.monotonic() - last_vlm_run_ts) >= VLM_ANALYSIS_INTERVAL_S
                 ):
@@ -405,13 +397,13 @@ def web():
                     )
 
             except Exception as e:
-                print(f"[YOLO] Error: {e}")
+                print(f"[ANALYSIS] Error: {e}")
             finally:
-                yolo_busy = False
+                analysis_busy = False
                 if pending_frame:
                     pf = pending_frame
                     pending_frame = None
-                    asyncio.create_task(process_yolo(pf[0], pf[1], pf[2]))
+                    asyncio.create_task(process_frame(pf[0], pf[1], pf[2]))
 
         try:
             while True:
@@ -430,11 +422,11 @@ def web():
                     latest_frame_id = frame_id
                     latest_frame_client_ts = frame_client_ts
 
-                    if yolo_busy:
+                    if analysis_busy:
                         pending_frame = (frame_b64, frame_id, frame_client_ts)
                     else:
                         pending_frame = None
-                        asyncio.create_task(process_yolo(frame_b64, frame_id, frame_client_ts))
+                        asyncio.create_task(process_frame(frame_b64, frame_id, frame_client_ts))
 
                 elif msg_type == "sensor":
                     sensor_snapshot = msg.get("data", {})
@@ -616,7 +608,7 @@ def web():
                 session["viewer_wss"].remove(ws)
 
     async def _run_session_pipeline(session, ingest_ws):
-        """Run the YOLO→Qwen pipeline for a session, reading frames from ingest_ws."""
+        """Run the Qwen-only pipeline for a session, reading frames from ingest_ws."""
 
         async def send_all(msg):
             """Send to ingest SDK + all viewers."""
@@ -654,6 +646,9 @@ def web():
                 new_zone = analysis.get("component") or analysis.get("zone")
                 if new_zone:
                     session["last_vlm_zone"] = new_zone
+                    if new_zone not in session["seen_zones"]:
+                        session["seen_zones"].add(new_zone)
+                        await send_all({"type": "zone_first_seen", "zone": new_zone})
 
                 msg = {
                     "type": "analysis", "data": analysis,
@@ -775,7 +770,7 @@ def web():
                 if session["mode"] == "797":
                     context = "You are inspecting a CAT 797F mining haul truck."
                 else:
-                    context = "You are a visual copilot."
+                    context = "You are a workplace safety inspection copilot."
                 prompt = (
                     f'{context} The technician asks: "{question}"\n'
                     "Answer based on what you see in the image. "
@@ -792,56 +787,28 @@ def web():
                 answer = "Could not process question."
             await send_all({"type": "voice_answer", "text": answer, "mode": session["mode"]})
 
-        async def process_yolo_session(frame_b64, frame_id, frame_client_ts):
+        async def process_analysis_session(frame_b64, frame_id, frame_client_ts):
             session["yolo_busy"] = True
             try:
-                if session["mode"] == "797":
-                    result = await asyncio.to_thread(yolo797.detect.remote, frame_b64)
-                else:
-                    result = await asyncio.to_thread(yolo.detect.remote, frame_b64, session["mode"])
-                detections = result.get("detections", [])
-                yolo_ms = result.get("yolo_ms", 0)
-
-                if session["mode"] == "797":
-                    from backend.zone_config import zone_from_label_797, zone_from_bbox_797
-                    _zone_fn = zone_from_label_797
-                    _bbox_fn = zone_from_bbox_797
-                else:
-                    from backend.zone_config import zone_from_label, zone_from_bbox
-                    _zone_fn = zone_from_label
-                    _bbox_fn = zone_from_bbox
-                zone_events = []
-                for det in detections:
-                    zone_id = _zone_fn(det["label"])
-                    if not zone_id:
-                        zone_id = _bbox_fn(det["bbox"])
-                    det["zone"] = zone_id
-                    if zone_id and zone_id not in session["seen_zones"]:
-                        session["seen_zones"].add(zone_id)
-                        zone_events.append(zone_id)
-
-                session["last_yolo_labels"] = {det["label"] for det in detections if det.get("label")}
-
-                total_z = len(session["dynamic_zones"]) or (8 if session["mode"] == "797" else 15)
+                # Qwen-only pipeline: emit detection shape for frontend compatibility.
+                session["last_yolo_labels"] = set()
+                total_z = len(session["dynamic_zones"]) or (8 if session["mode"] == "797" else 6)
                 det_msg = {
-                    "type": "detection", "detections": detections,
+                    "type": "detection", "detections": [],
                     "coverage": len(session["seen_zones"]), "total_zones": total_z,
-                    "mode": session["mode"], "yolo_ms": yolo_ms,
+                    "mode": session["mode"], "yolo_ms": 0,
                     "frame_id": frame_id, "client_ts": frame_client_ts,
                     "server_ts": time.time(),
                 }
                 await send_all(det_msg)
-                for zid in zone_events:
-                    await send_all({"type": "zone_first_seen", "zone": zid})
 
-                # Equipment auto-identification on first frame with detections
-                if detections and not session["equipment_id_done"] and session["latest_frame_b64"]:
+                # Equipment auto-identification on first valid frame in 797 mode.
+                if session["mode"] == "797" and not session["equipment_id_done"] and session["latest_frame_b64"]:
                     session["equipment_id_done"] = True
                     asyncio.create_task(_run_equipment_id(session, session["latest_frame_b64"], qwen, send_all))
 
                 if (
-                    detections
-                    and not session["vlm_busy"]
+                    not session["vlm_busy"]
                     and session["latest_frame_b64"]
                     and (time.monotonic() - session["last_vlm_run_ts"]) >= VLM_ANALYSIS_INTERVAL_S
                 ):
@@ -850,13 +817,13 @@ def web():
                         session["latest_frame_client_ts"], triggered_by="cadence",
                     ))
             except Exception as e:
-                print(f"[YOLO] Error: {e}")
+                print(f"[ANALYSIS] Error: {e}")
             finally:
                 session["yolo_busy"] = False
                 if session["pending_frame"]:
                     pf = session["pending_frame"]
                     session["pending_frame"] = None
-                    asyncio.create_task(process_yolo_session(pf[0], pf[1], pf[2]))
+                    asyncio.create_task(process_analysis_session(pf[0], pf[1], pf[2]))
 
         _MODE_MAP = {0: "general", 1: "797"}
 
@@ -893,7 +860,7 @@ def web():
                         session["pending_frame"] = (session["latest_frame_b64"], frame_id, frame_client_ts)
                     else:
                         session["pending_frame"] = None
-                        asyncio.create_task(process_yolo_session(session["latest_frame_b64"], frame_id, frame_client_ts))
+                        asyncio.create_task(process_analysis_session(session["latest_frame_b64"], frame_id, frame_client_ts))
 
                     continue
 
@@ -923,7 +890,7 @@ def web():
                             session["pending_frame"] = (frame_b64, frame_id, frame_client_ts)
                         else:
                             session["pending_frame"] = None
-                            asyncio.create_task(process_yolo_session(frame_b64, frame_id, frame_client_ts))
+                            asyncio.create_task(process_analysis_session(frame_b64, frame_id, frame_client_ts))
 
                 elif msg_type == "sensor":
                     session["sensor_snapshot"] = msg.get("data", {})
@@ -1174,6 +1141,16 @@ def web():
                     session["unit_context"] = msg.get("context", "")
                     print(f"[MEMORY] Viewer sent unit context: {str(session['unit_context'])[:100]}")
 
+                if msg_type == "set_location":
+                    loc = str(msg.get("location", "")).strip()
+                    if loc and not session.get("location"):
+                        session["location"] = loc
+                        try:
+                            from .db import update_session_location
+                            await update_session_location(session["id"], loc)
+                        except Exception as e:
+                            print(f"[DB] update location error: {e}")
+
                 if msg_type == "voice_question":
                     frame = session.get("latest_frame_b64") or ""
                     asyncio.create_task(
@@ -1230,7 +1207,7 @@ def web():
         try:
             audio_bytes = base64.b64decode(audio_b64)
             frame_b64 = session.get("latest_frame_b64") or ""
-            context = "You are inspecting a CAT 797F mining haul truck." if session["mode"] == "797" else "You are a visual copilot."
+            context = "You are inspecting a CAT 797F mining haul truck." if session["mode"] == "797" else "You are a workplace safety inspection copilot."
             result = await asyncio.wait_for(
                 asyncio.to_thread(qwen_ref.voice_answer.remote, audio_bytes, frame_b64, context),
                 timeout=30,
@@ -1275,7 +1252,7 @@ def web():
             })
             return
         try:
-            context = "You are inspecting a CAT 797F mining haul truck." if session["mode"] == "797" else "You are a visual copilot."
+            context = "You are inspecting a CAT 797F mining haul truck." if session["mode"] == "797" else "You are a workplace safety inspection copilot."
             prompt = (
                 f'{context} The operator asks: "{question}"\n'
                 "Answer based on what you see in the image. "
