@@ -32,27 +32,27 @@ export const ZONE_LABELS: Record<ZoneId, string> = {
   exhaust: "Exhaust",
 };
 
-/** Cat 797F part numbers by zone (from cat-scrape output) — used for parts.cat.com links */
+/** Search terms by zone — used to build parts.cat.com search URLs for 797F */
 export const ZONE_PART_NUMBERS: Record<ZoneId, string> = {
-  tires_rims: "192-4744",      // Undercarriage: Hex Head Bolt
-  dump_body: "217-4195",      // Structures: Hose
-  hoist_cylinders: "4T-6788", // Filters: Hydraulic/Transmission Filter
-  suspension: "156-5444",     // Undercarriage: Suspension Mounting Key
-  engine: "597-1291",         // Engine: Governor Gasket
-  cooling: "172-5718",        // Engine: Radiator Water Lines Gasket
-  drivetrain: "343-4465",     // Drivetrain: Transmission Element
-  brakes: "381-3629",         // Drivetrain: Brake Friction Disc
-  cab: "204-2281",            // Cabs: Cable Strap
-  steps_handrails: "425-2594", // Structures: Suspension Support Channel Plate
-  frame: "519-7297",          // Structures: Spacer Plate
-  hydraulics: "465-6502",     // Drivetrain: Hydraulic Oil Filter
-  exhaust: "133-5953",        // Engine: Exhaust Manifold Shield
+  tires_rims: "797F tires rims wheels",
+  dump_body: "797F dump body truck box",
+  hoist_cylinders: "797F hoist cylinders",
+  suspension: "797F suspension cylinders",
+  engine: "797F engine components",
+  cooling: "797F radiator cooling system",
+  drivetrain: "797F drivetrain transmission",
+  brakes: "797F brake components",
+  cab: "797F cab windshield ROPS",
+  steps_handrails: "797F steps handrails",
+  frame: "797F frame chassis",
+  hydraulics: "797F hydraulic components",
+  exhaust: "797F exhaust system",
 };
 
 export const CAT_PARTS_SEARCH_URL = "https://parts.cat.com/en/catcorp/search";
 
-export function getPartSearchUrl(partNumber: string): string {
-  return `${CAT_PARTS_SEARCH_URL}?q=${encodeURIComponent(partNumber)}`;
+export function getPartSearchUrl(searchTerm: string): string {
+  return `${CAT_PARTS_SEARCH_URL}?q=${encodeURIComponent(searchTerm)}`;
 }
 
 export const SEVERITY_COLORS = {

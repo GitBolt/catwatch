@@ -79,6 +79,25 @@ function humanize(s: string): string {
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** Map Qwen component names → zone IDs used in ZONE_PART_NUMBERS */
+const COMPONENT_TO_ZONE: Record<string, ZoneId> = {
+  undercarriage: "tires_rims",
+  engine: "engine",
+  fluids: "cooling",
+  hydraulics: "hydraulics",
+  drivetrain: "drivetrain",
+  electrical: "cab",
+  cab: "cab",
+  structures: "frame",
+};
+
+function zoneIdForComponent(comp: string): ZoneId | undefined {
+  if (!comp || comp === "none" || comp === "General") return undefined;
+  const lower = comp.toLowerCase().replace(/\s+/g, "_");
+  if (lower in ZONE_PART_NUMBERS) return lower as ZoneId;
+  return COMPONENT_TO_ZONE[lower];
+}
+
 const CODE_ORDER: Record<string, number> = { Poor: 3, Fair: 2, Good: 1 };
 
 async function loadLogoBase64(): Promise<string | null> {
@@ -157,54 +176,33 @@ export async function generateInspectionPDF(data: InspectionPDFData): Promise<js
 
   let y = 32;
 
-  // ── INSPECTION DETAILS (two-column) ─────────────────────
+  // ── INSPECTION DETAILS (single-column) ──────────────────
   y = sectionBand(doc, y, "Inspection Details", margin, contentWidth);
 
-  const halfW = contentWidth / 2 - 2;
+  const detailRows: string[][] = [
+    ["Inspector", "AI-Assisted (CatWatch)"],
+    ["Equipment", data.mode === "797" ? String(equipModel) : "N/A"],
+    ["Inspection Date", formatDate(data.createdAt)],
+    ["Duration", getDuration(data.createdAt, data.endedAt)],
+    ["Location", locationStr],
+    ["Status", data.status.charAt(0).toUpperCase() + data.status.slice(1)],
+  ];
+  if (data.unitSerial) detailRows.splice(2, 0, ["Serial / ID", String(equipSerial)]);
 
   autoTable(doc, {
     startY: y,
     head: [],
-    body: [
-      ["Inspector", "AI-Assisted (CatWatch)"],
-      ["Inspection Date", formatDate(data.createdAt)],
-      ["Report Date", formatDate(new Date().toISOString())],
-      ["Duration", getDuration(data.createdAt, data.endedAt)],
-      ["Location", locationStr],
-      ["Mode", data.mode.toUpperCase()],
-    ],
+    body: detailRows,
     theme: "grid",
-    margin: { left: margin, right: pageWidth - margin - halfW },
+    margin: { left: margin, right: margin },
     styles: { fontSize: 8, cellPadding: 2, lineColor: TABLE_BORDER, lineWidth: 0.3 },
     columnStyles: {
-      0: { fontStyle: "bold", cellWidth: 32, fillColor: LIGHT_GRAY, textColor: DARK_GRAY },
+      0: { fontStyle: "bold", cellWidth: 36, fillColor: LIGHT_GRAY, textColor: DARK_GRAY },
       1: { textColor: BLACK },
     },
   });
 
-  const leftFinalY = (doc as any).lastAutoTable.finalY;
-
-  autoTable(doc, {
-    startY: y,
-    head: [],
-    body: [
-      ["Equipment", String(equipModel)],
-      ["Serial / ID", String(equipSerial)],
-      ["Operating Hours", String(operatingHours)],
-      ["Fleet Tag", data.fleetTag || "—"],
-      ["Coverage", `${Math.round(data.coveragePct)}%`],
-      ["Status", data.status.charAt(0).toUpperCase() + data.status.slice(1)],
-    ],
-    theme: "grid",
-    margin: { left: margin + halfW + 4, right: margin },
-    styles: { fontSize: 8, cellPadding: 2, lineColor: TABLE_BORDER, lineWidth: 0.3 },
-    columnStyles: {
-      0: { fontStyle: "bold", cellWidth: 32, fillColor: LIGHT_GRAY, textColor: DARK_GRAY },
-      1: { textColor: BLACK },
-    },
-  });
-
-  y = Math.max(leftFinalY, (doc as any).lastAutoTable.finalY) + 4;
+  y = (doc as any).lastAutoTable.finalY + 4;
 
   // ── OVERALL ASSESSMENT ──────────────────────────────────
   y = sectionBand(doc, y, "Overall Assessment", margin, contentWidth);
@@ -251,7 +249,9 @@ export async function generateInspectionPDF(data: InspectionPDFData): Promise<js
   // ── COMPONENT SUMMARY (grouped by component, worst code) ──
   const componentMap = new Map<string, { worst: string; count: number; descriptions: string[] }>();
   data.findings.forEach((f) => {
-    const key = f.zone || "General";
+    const rawKey = f.zone || "";
+    if (!rawKey || rawKey.toLowerCase() === "none") return; // skip unidentified frames
+    const key = rawKey;
     const code = ratingToCode(f.rating);
     const existing = componentMap.get(key);
     if (existing) {
@@ -285,7 +285,8 @@ export async function generateInspectionPDF(data: InspectionPDFData): Promise<js
       const remarks = info.descriptions.length > 0
         ? info.descriptions.join("; ").slice(0, 200)
         : info.worst === "Good" ? "No issues detected" : "";
-      const partNum = comp in ZONE_PART_NUMBERS ? ZONE_PART_NUMBERS[comp as ZoneId] : undefined;
+      const zid = zoneIdForComponent(comp);
+      const partNum = zid ? ZONE_PART_NUMBERS[zid] : undefined;
       const partUrl = info.worst !== "Good" && partNum ? getPartSearchUrl(partNum) : "";
       compPartUrls.push(partUrl);
       return [
@@ -344,7 +345,8 @@ export async function generateInspectionPDF(data: InspectionPDFData): Promise<js
         const code = ratingToCode(f.rating);
         const style = getCodeStyle(code);
         const priority = f.rating === "RED" ? "Immediate" : "Scheduled";
-        const partNum = f.zone && ZONE_PART_NUMBERS[f.zone as ZoneId];
+        const zid = zoneIdForComponent(f.zone || "");
+        const partNum = zid ? ZONE_PART_NUMBERS[zid] : undefined;
         const partUrl = partNum ? getPartSearchUrl(partNum) : "";
         actionPartUrls.push(partUrl);
         return [
@@ -399,7 +401,8 @@ export async function generateInspectionPDF(data: InspectionPDFData): Promise<js
       const code = ratingToCode(f.rating);
       const style = getCodeStyle(code);
       const hasDefect = f.rating === "RED" || f.rating === "YELLOW";
-      const partNum = f.zone && ZONE_PART_NUMBERS[f.zone as ZoneId];
+      const zid = zoneIdForComponent(f.zone || "");
+      const partNum = zid ? ZONE_PART_NUMBERS[zid] : undefined;
       const partUrl = hasDefect && partNum ? getPartSearchUrl(partNum) : "";
       logPartUrls.push(partUrl);
       return [

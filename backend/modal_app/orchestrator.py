@@ -658,12 +658,21 @@ def web():
                 await send_all(msg)
 
                 from .db import save_finding
+
+                _BLUR_KEYWORDS = ("blur", "blurry", "motion blur", "image quality",
+                                  "not clear", "difficult to identify", "lack of clear",
+                                  "poor lighting", "overexposed", "underexposed", "out of focus")
+
+                def _is_image_quality_issue(text: str) -> bool:
+                    t = text.lower()
+                    return any(kw in t for kw in _BLUR_KEYWORDS)
+
                 severity = analysis.get("severity", "GREEN")
                 component = analysis.get("component") or analysis.get("zone") or "General"
                 now_iso = datetime.utcnow().isoformat() + "Z"
 
                 desc = analysis.get("description", "")
-                if desc and desc.strip():
+                if desc and desc.strip() and not _is_image_quality_issue(desc):
                     finding_data = {"zone": component, "rating": severity, "description": desc.strip(), "createdAt": now_iso}
                     if severity in ("RED", "YELLOW") and frame_b64:
                         finding_data["snapshot"] = frame_b64
@@ -675,7 +684,7 @@ def web():
                         print(f"[DB] save_finding error: {e}")
 
                 for f in analysis.get("findings", []):
-                    if isinstance(f, str) and f.strip() and f.strip() != desc.strip():
+                    if isinstance(f, str) and f.strip() and f.strip() != desc.strip() and not _is_image_quality_issue(f):
                         finding_data = {"zone": component, "rating": severity, "description": f, "createdAt": now_iso}
                         if severity in ("RED", "YELLOW") and frame_b64:
                             finding_data["snapshot"] = frame_b64

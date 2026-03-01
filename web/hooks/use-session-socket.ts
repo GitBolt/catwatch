@@ -197,14 +197,19 @@ export function useSessionSocket(sessionId: string | null): SessionState {
             const name = addr.building || addr.amenity || addr.road || addr.neighbourhood || addr.suburb || addr.city || fallback;
             setGeoKey(String(name));
             setLocation(String(name));
-            send({ type: "set_location", location: String(name) });
+            // Persist directly via REST — no WS timing dependency
+            fetch(`/api/inspections/${sessionId}/location`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ location: String(name) }),
+            }).catch(() => {});
           }
         } catch { /* keep coordinate fallback */ }
       },
       () => {},
       { timeout: 5000, maximumAge: 300000 },
     );
-  }, [unitSerial, location]);
+  }, [unitSerial, location, sessionId]);
 
   useEffect(() => {
     if (!sessionId) return;

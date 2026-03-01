@@ -43,7 +43,7 @@ export default async function InspectionDetailPage({
     unitSerial: inspectionSession.unitSerial ?? null,
     unitModel: inspectionSession.model ?? null,
     fleetTag: inspectionSession.fleetTag ?? null,
-    location: (inspectionSession as any).location ?? null,
+    location: (inspectionSession as Record<string, unknown>).location as string ?? null,
     findings: inspectionSession.findings.map((f) => ({
       zone: f.zone,
       rating: f.rating,

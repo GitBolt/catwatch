@@ -344,10 +344,16 @@ Only inspect CAT 797F components and report defects: leaks, cracks, deformation,
 missing hardware, severe wear, overheating indicators, and safety-critical issues.
 
 Rules:
-- If a CAT 797F is visible: inspect only truck defects and risks.
-- Ignore unrelated objects/people/background unless they create a direct safety risk to inspection.
-- If no CAT 797F is visible: return GREEN with findings=[] and callout="No 797F visible".
+- If a CAT 797F truck or any of its components are visible: inspect them for defects.
+  Set callout to a short description of the worst defect, or "Components normal" if no defect.
+  Set component to the primary area you inspected.
+- If NO CAT 797F truck or components are visible at all: set severity=GREEN, findings=[],
+  callout="No 797F visible", component="none".
+- Ignore unrelated objects/people/background unless they create a direct safety risk.
 - Never fabricate defects or components not visible in the frame.
+- NEVER report image quality issues (blur, motion blur, poor lighting, camera angle) as findings
+  or defects. These are camera problems, not equipment problems. If the image is blurry,
+  still attempt to inspect what you can see; do not mention blur in findings or callout.
 """
 
 _797_ZONE_CRITERIA = {
@@ -405,8 +411,8 @@ CAT_797_OUTPUT_SCHEMA = """
 Analyze this frame. Respond in valid JSON with these exact keys:
 - description: what you see in 1-2 sentences (be specific and honest)
 - severity: GREEN / YELLOW / RED
-- findings: array of defect observations only (max 3), empty if no defect
-- callout: short defect callout in 4-6 words; use "No 797F visible" if no truck in frame
+- findings: array of equipment defect observations only (max 3), empty if no defect. Never include image quality issues like blur.
+- callout: if truck visible, short defect summary in 4-6 words (or "Components normal" if no defects). ONLY use "No 797F visible" when you truly cannot see any part of the truck.
 - confidence: 0.0 to 1.0
 - component: primary inspected CAT 797F component (undercarriage, engine, fluids, hydraulics, drivetrain, electrical, cab, structures) or "none" if no truck visible"""
 
