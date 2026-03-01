@@ -79,7 +79,7 @@ export function ReportPreview({ inspection }: Props) {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <h2 style={{ fontSize: 18, fontWeight: 600 }}>Report</h2>
           <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)" }}>
@@ -156,8 +156,8 @@ export function ReportPreview({ inspection }: Props) {
               title="Inspection Report PDF"
               style={{
                 width: "100%",
-                height: "80vh",
-                minHeight: 600,
+                height: "85vh",
+                minHeight: 700,
                 borderRadius: "var(--radius)",
                 border: "1px solid var(--border)",
                 background: "#fff",

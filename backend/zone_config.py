@@ -129,3 +129,70 @@ def zone_from_bbox(bbox):
                 best_zone = zone_id
 
     return best_zone
+
+
+# ── CAT 797 haul truck zone config ────────────────────────────────────────────
+
+ZONE_REGIONS_797 = {
+    "undercarriage": (0.0,  0.7,  1.0,  1.0),
+    "engine":        (0.3,  0.05, 0.75, 0.55),
+    "fluids":        (0.25, 0.05, 0.75, 0.6),
+    "hydraulics":    (0.1,  0.2,  0.9,  0.75),
+    "drivetrain":    (0.0,  0.4,  0.4,  0.85),
+    "electrical":    (0.0,  0.05, 0.35, 0.5),
+    "cab":           (0.0,  0.0,  0.45, 0.65),
+    "structures":    (0.0,  0.0,  1.0,  1.0),
+}
+
+LABEL_TO_ZONE_797 = {
+    "cabs_damaged":                          "cab",
+    "cabs_healthy":                          "cab",
+    "drivetrain_damaged":                    "drivetrain",
+    "drivetrain_healthy":                    "drivetrain",
+    "electrical_electronics_damaged":        "electrical",
+    "electrical_electronics_healthy":        "electrical",
+    "engine_damaged":                        "engine",
+    "engine_healthy":                        "engine",
+    "filters_fluids_damaged":               "fluids",
+    "filters_fluids_healthy":               "fluids",
+    "ground_engaging_tools_healthy":         "structures",
+    "hardware_seals_consumables_healthy":    "structures",
+    "hoses_tubes_healthy":                   "fluids",
+    "hydraulics_healthy":                    "hydraulics",
+    "structures_other_systems_damaged":      "structures",
+    "structures_other_systems_healthy":      "structures",
+    "undercarriage_damaged":                 "undercarriage",
+    "undercarriage_healthy":                 "undercarriage",
+    "upgrade_repair_kits_healthy":           "structures",
+    "workshop_supplies_healthy":             "structures",
+}
+
+TOTAL_ZONES_797 = len(ZONE_REGIONS_797)  # 8
+
+_LABEL_KEYS_797_BY_LEN = sorted(LABEL_TO_ZONE_797.keys(), key=len, reverse=True)
+
+
+def zone_from_label_797(label):
+    """Map a 797 YOLO detection label to a zone ID."""
+    low = label.lower().strip()
+    if low in LABEL_TO_ZONE_797:
+        return LABEL_TO_ZONE_797[low]
+    for key in _LABEL_KEYS_797_BY_LEN:
+        if key in low:
+            return LABEL_TO_ZONE_797[key]
+    return None
+
+
+def zone_from_bbox_797(bbox):
+    """Fallback: map bbox center to 797 zone region."""
+    cx = (bbox[0] + bbox[2]) / 2.0
+    cy = (bbox[1] + bbox[3]) / 2.0
+    best_zone = None
+    best_area = float("inf")
+    for zone_id, (rx1, ry1, rx2, ry2) in ZONE_REGIONS_797.items():
+        if rx1 <= cx <= rx2 and ry1 <= cy <= ry2:
+            area = (rx2 - rx1) * (ry2 - ry1)
+            if area < best_area:
+                best_area = area
+                best_zone = zone_id
+    return best_zone

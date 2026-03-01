@@ -16,7 +16,7 @@ export function DownloadPDFButton({ inspection }: Props) {
     async function handleClick() {
         setGenerating(true);
         try {
-            const doc = generateInspectionPDF(inspection);
+            const doc = await generateInspectionPDF(inspection);
             doc.save(
                 `catwatch-inspection-${inspection.sessionId.slice(0, 8)}.pdf`
             );

@@ -11,7 +11,7 @@ from datetime import datetime
 import modal
 
 from . import app, web_image
-from .yolo_detector import YoloDetector
+from .yolo_detector import YoloDetector, YoloDetector797
 from .qwen_vl import Qwen25VLInspector
 
 VLM_ANALYSIS_INTERVAL_S = 3.0
@@ -156,6 +156,7 @@ def web():
     )
 
     yolo = YoloDetector()
+    yolo797 = YoloDetector797()
     qwen = Qwen25VLInspector()
 
     @api.websocket("/ws")
@@ -323,7 +324,10 @@ def web():
         async def run_voice_answer(question, frame_b64):
             print(f"[VOICE Q] {question[:60]}")
             try:
-                context = "You are inspecting a CAT 797F mining haul truck." if inspection_mode == "cat" else "You are a visual copilot for general scene and safety monitoring."
+                if inspection_mode in ("cat", "797"):
+                    context = "You are inspecting a CAT 797F mining haul truck."
+                else:
+                    context = "You are a visual copilot for general scene and safety monitoring."
                 prompt = (
                     f"{context} The technician asks: \"{question}\""
                     "\nAnswer in one concise sentence based on the image."
@@ -348,16 +352,26 @@ def web():
 
             yolo_busy = True
             try:
-                result = await asyncio.to_thread(yolo.detect.remote, frame_b64, inspection_mode)
+                if inspection_mode == "797":
+                    result = await asyncio.to_thread(yolo797.detect.remote, frame_b64)
+                else:
+                    result = await asyncio.to_thread(yolo.detect.remote, frame_b64, inspection_mode)
                 detections = result.get("detections", [])
                 yolo_ms = result.get("yolo_ms", 0)
 
-                from backend.zone_config import zone_from_label, zone_from_bbox
+                if inspection_mode == "797":
+                    from backend.zone_config import zone_from_label_797, zone_from_bbox_797
+                    _zone_fn = zone_from_label_797
+                    _bbox_fn = zone_from_bbox_797
+                else:
+                    from backend.zone_config import zone_from_label, zone_from_bbox
+                    _zone_fn = zone_from_label
+                    _bbox_fn = zone_from_bbox
                 zone_events = []
                 for det in detections:
-                    zone_id = zone_from_label(det["label"])
+                    zone_id = _zone_fn(det["label"])
                     if not zone_id:
-                        zone_id = zone_from_bbox(det["bbox"])
+                        zone_id = _bbox_fn(det["bbox"])
                     det["zone"] = zone_id
                     if zone_id and zone_id not in seen_zones:
                         seen_zones.add(zone_id)
@@ -367,7 +381,7 @@ def web():
                     "type": "detection",
                     "detections": detections,
                     "coverage": len(seen_zones),
-                    "total_zones": 15,
+                    "total_zones": 8 if inspection_mode == "797" else 15,
                     "mode": inspection_mode,
                     "yolo_ms": yolo_ms,
                     "frame_id": frame_id,
@@ -413,7 +427,7 @@ def web():
                     frame_id = int(msg.get("frame_id", 0))
                     frame_client_ts = float(msg.get("client_ts", 0))
                     incoming_mode = str(msg.get("mode", "")).lower()
-                    if incoming_mode in ("general", "cat"):
+                    if incoming_mode in ("general", "cat", "797"):
                         inspection_mode = incoming_mode
                     latest_frame_b64 = frame_b64
                     latest_frame_id = frame_id
@@ -458,7 +472,7 @@ def web():
 
                 elif msg_type == "set_mode":
                     requested_mode = str(msg.get("mode", "")).lower()
-                    if requested_mode in ("general", "cat"):
+                    if requested_mode in ("general", "cat", "797"):
                         inspection_mode = requested_mode
                     await ws.send_json({"type": "mode", "mode": inspection_mode})
 
@@ -761,7 +775,10 @@ def web():
 
         async def run_voice_session(question, frame_b64):
             try:
-                context = "You are inspecting a CAT 797F mining haul truck." if session["mode"] == "cat" else "You are a visual copilot."
+                if session["mode"] in ("cat", "797"):
+                    context = "You are inspecting a CAT 797F mining haul truck."
+                else:
+                    context = "You are a visual copilot."
                 prompt = (
                     f'{context} The technician asks: "{question}"\n'
                     "Answer based on what you see in the image. "
@@ -781,16 +798,26 @@ def web():
         async def process_yolo_session(frame_b64, frame_id, frame_client_ts):
             session["yolo_busy"] = True
             try:
-                result = await asyncio.to_thread(yolo.detect.remote, frame_b64, session["mode"])
+                if session["mode"] == "797":
+                    result = await asyncio.to_thread(yolo797.detect.remote, frame_b64)
+                else:
+                    result = await asyncio.to_thread(yolo.detect.remote, frame_b64, session["mode"])
                 detections = result.get("detections", [])
                 yolo_ms = result.get("yolo_ms", 0)
 
-                from backend.zone_config import zone_from_label, zone_from_bbox
+                if session["mode"] == "797":
+                    from backend.zone_config import zone_from_label_797, zone_from_bbox_797
+                    _zone_fn = zone_from_label_797
+                    _bbox_fn = zone_from_bbox_797
+                else:
+                    from backend.zone_config import zone_from_label, zone_from_bbox
+                    _zone_fn = zone_from_label
+                    _bbox_fn = zone_from_bbox
                 zone_events = []
                 for det in detections:
-                    zone_id = zone_from_label(det["label"])
+                    zone_id = _zone_fn(det["label"])
                     if not zone_id:
-                        zone_id = zone_from_bbox(det["bbox"])
+                        zone_id = _bbox_fn(det["bbox"])
                     det["zone"] = zone_id
                     if zone_id and zone_id not in session["seen_zones"]:
                         session["seen_zones"].add(zone_id)
@@ -798,7 +825,7 @@ def web():
 
                 session["last_yolo_labels"] = {det["label"] for det in detections if det.get("label")}
 
-                total_z = len(session["dynamic_zones"]) or 15
+                total_z = len(session["dynamic_zones"]) or (8 if session["mode"] == "797" else 15)
                 det_msg = {
                     "type": "detection", "detections": detections,
                     "coverage": len(session["seen_zones"]), "total_zones": total_z,
@@ -834,7 +861,7 @@ def web():
                     session["pending_frame"] = None
                     asyncio.create_task(process_yolo_session(pf[0], pf[1], pf[2]))
 
-        _MODE_MAP = {0: "general", 1: "cat"}
+        _MODE_MAP = {0: "general", 1: "cat", 2: "797"}
 
         try:
             while True:
@@ -852,7 +879,7 @@ def web():
                     jpeg_bytes = raw_bytes[13:]
 
                     incoming_mode = _MODE_MAP.get(mode_byte, "general")
-                    if incoming_mode in ("general", "cat"):
+                    if incoming_mode in ("general", "cat", "797"):
                         session["mode"] = incoming_mode
 
                     session["latest_frame_b64"] = base64.b64encode(jpeg_bytes).decode("ascii")
@@ -884,7 +911,7 @@ def web():
                     frame_id = int(msg.get("frame_id", 0))
                     frame_client_ts = float(msg.get("client_ts", 0))
                     incoming_mode = str(msg.get("mode", "")).lower()
-                    if incoming_mode in ("general", "cat"):
+                    if incoming_mode in ("general", "cat", "797"):
                         session["mode"] = incoming_mode
                     session["latest_frame_b64"] = frame_b64
                     session["latest_frame_id"] = frame_id
@@ -921,7 +948,7 @@ def web():
 
                 elif msg_type == "set_mode":
                     requested_mode = str(msg.get("mode", "")).lower()
-                    if requested_mode in ("general", "cat"):
+                    if requested_mode in ("general", "cat", "797"):
                         session["mode"] = requested_mode
                     await send_all({"type": "mode", "mode": session["mode"]})
 

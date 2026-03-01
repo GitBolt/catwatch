@@ -77,7 +77,7 @@ export function TopBar({
               color: mode === "cat" ? "#1a1714" : "var(--text-dim)",
             }}
           >
-            CAT
+            CAT 797F
           </button>
         </div>
       </div>
