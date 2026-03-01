@@ -58,9 +58,9 @@ export default async function InspectionDetailPage({
   const greenCount = inspectionSession.findings.filter((f) => f.rating === "GREEN").length;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div className="inspection-detail-page" style={{ display: "flex", flexDirection: "column", gap: 36 }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <Link href="/dashboard/inspections" style={{ fontSize: 13, color: "var(--text-dim)" }}>
             Inspections
@@ -85,7 +85,7 @@ export default async function InspectionDetailPage({
       </div>
 
       {/* Summary strip */}
-      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", padding: "16px 20px", background: "var(--bg-card)", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
         <div style={{ display: "flex", gap: 8 }}>
           <SeverityChip label="RED" count={redCount} color={SEVERITY_COLORS.RED} />
           <SeverityChip label="YEL" count={yellowCount} color={SEVERITY_COLORS.YELLOW} />
@@ -103,7 +103,9 @@ export default async function InspectionDetailPage({
       </div>
 
       {/* Report — full width */}
-      <ReportPreview inspection={inspectionData} />
+      <div className="report-section" style={{ padding: 32, background: "var(--bg-card)", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
+        <ReportPreview inspection={inspectionData} />
+      </div>
 
       {/* Fleet findings */}
       <FleetSimilarFindings

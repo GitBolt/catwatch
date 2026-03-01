@@ -58,36 +58,39 @@ export default function LiveSessionPage() {
   if (sessionEnded) {
     const s = sessionEnded;
     return (
-      <div style={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
-        <div style={{ maxWidth: 480, width: "100%", padding: 32 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 24, letterSpacing: "-0.02em" }}>
+      <div style={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center", background: "var(--bg)", padding: 48 }}>
+        <div style={{ maxWidth: 640, width: "100%", padding: "48px 56px", background: "var(--bg-card)", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
+          <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 8, letterSpacing: "-0.02em" }}>
             Inspection Complete
           </h1>
+          <p style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 40, lineHeight: 1.5 }}>
+            Your inspection has been saved. View the full report with findings, coverage, and AI-generated summary.
+          </p>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
-            <div className="card stat-card">
-              <div style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{s.zones_inspected}</div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>of {s.total_zones} zones</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 40 }}>
+            <div className="card stat-card" style={{ padding: 24 }}>
+              <div style={{ fontSize: 32, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{s.zones_inspected}</div>
+              <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>of {s.total_zones} zones</div>
             </div>
-            <div className="card stat-card">
-              <div style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{s.coverage_pct}%</div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>coverage</div>
+            <div className="card stat-card" style={{ padding: 24 }}>
+              <div style={{ fontSize: 32, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{s.coverage_pct}%</div>
+              <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>coverage</div>
             </div>
-            <div className="card stat-card">
-              <div style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{s.findings_count}</div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>findings</div>
+            <div className="card stat-card" style={{ padding: 24 }}>
+              <div style={{ fontSize: 32, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{s.findings_count}</div>
+              <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>findings</div>
             </div>
-            <div className="card stat-card">
-              <div style={{ fontSize: 14, fontWeight: 600, textTransform: "uppercase", color: "var(--amber)" }}>{s.mode}</div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>mode</div>
+            <div className="card stat-card" style={{ padding: 24 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, textTransform: "uppercase", color: "var(--amber)" }}>{s.mode}</div>
+              <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>mode</div>
             </div>
           </div>
 
-          <div className="mono" style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 24 }}>
+          <div className="mono" style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 32, padding: "12px 16px", background: "var(--bg)", borderRadius: "var(--radius-sm)" }}>
             Session {s.session_id}
           </div>
 
-          <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ display: "flex", gap: 16 }}>
             <button
               onClick={() => router.push(`/dashboard/inspections/${s.session_id}`)}
               className="btn btn-primary"

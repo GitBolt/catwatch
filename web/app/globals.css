@@ -73,6 +73,19 @@ pre { font-family: "SF Mono", "Fira Code", monospace; }
   padding: 0 24px;
 }
 
+/* Inspection detail page uses wider layout when viewport allows */
+@media (min-width: 1400px) {
+  .inspection-detail-page {
+    margin-left: -60px;
+    margin-right: -60px;
+    width: calc(100% + 120px);
+    max-width: 1400px;
+    padding-left: 32px;
+    padding-right: 32px;
+    box-sizing: border-box;
+  }
+}
+
 /* ─── Cards ──────────────────────────────────── */
 
 .card {
