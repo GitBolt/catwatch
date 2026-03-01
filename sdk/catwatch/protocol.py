@@ -12,7 +12,7 @@ class Protocol:
     def __init__(self, ws_url, api_key):
         self._url = ws_url
         self._api_key = api_key
-        self._send_q = queue.Queue(maxsize=2)  # drop old frames
+        self._send_q = queue.Queue(maxsize=4)
         self._recv_q = queue.Queue(maxsize=64)
         self._running = False
         self._connected = False
@@ -24,13 +24,20 @@ class Protocol:
         self._thread.start()
 
     def send(self, payload):
-        """Queue a message to send. Drops oldest if queue is full."""
+        """Queue a JSON text message. Drops oldest if queue is full."""
+        self._enqueue(json.dumps(payload))
+
+    def send_binary(self, data: bytes):
+        """Queue a binary message (e.g. frame header + JPEG). Drops oldest if full."""
+        self._enqueue(data)
+
+    def _enqueue(self, item):
         if self._send_q.full():
             try:
                 self._send_q.get_nowait()
             except queue.Empty:
                 pass
-        self._send_q.put(payload)
+        self._send_q.put(item)
 
     def recv(self):
         """Non-blocking receive. Returns message dict or None."""
@@ -55,7 +62,6 @@ class Protocol:
                     max_size=10 * 1024 * 1024,
                     close_timeout=10,
                 ) as ws:
-                    # Auth handshake
                     ws.send(json.dumps({"type": "auth", "api_key": self._api_key}))
                     auth_resp = json.loads(ws.recv(timeout=10))
                     if auth_resp.get("type") == "error":
@@ -65,19 +71,18 @@ class Protocol:
                     backoff = 2.0
 
                     while self._running:
-                        # Send queued messages
                         try:
-                            msg = self._send_q.get(timeout=0.01)
-                            ws.send(json.dumps(msg))
+                            msg = self._send_q.get(timeout=0.005)
+                            ws.send(msg)
                         except queue.Empty:
                             pass
 
-                        # Receive messages
                         try:
-                            raw = ws.recv(timeout=0.01)
-                            parsed = json.loads(raw)
-                            if not self._recv_q.full():
-                                self._recv_q.put(parsed)
+                            raw = ws.recv(timeout=0.005)
+                            if isinstance(raw, str):
+                                parsed = json.loads(raw)
+                                if not self._recv_q.full():
+                                    self._recv_q.put(parsed)
                         except TimeoutError:
                             pass
 
