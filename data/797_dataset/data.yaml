@@ -1,0 +1,25 @@
+names:
+- cabs_damaged
+- cabs_healthy
+- drivetrain_damaged
+- drivetrain_healthy
+- electrical_electronics_damaged
+- electrical_electronics_healthy
+- engine_damaged
+- engine_healthy
+- filters_fluids_damaged
+- filters_fluids_healthy
+- ground_engaging_tools_healthy
+- hardware_seals_consumables_healthy
+- hoses_tubes_healthy
+- hydraulics_healthy
+- structures_other_systems_damaged
+- structures_other_systems_healthy
+- undercarriage_damaged
+- undercarriage_healthy
+- upgrade_repair_kits_healthy
+- workshop_supplies_healthy
+nc: 20
+path: /Users/evan/Desktop/dronecat/data/797_dataset
+train: images/train
+val: images/val

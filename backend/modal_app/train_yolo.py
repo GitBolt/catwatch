@@ -188,12 +188,15 @@ def train(
     batch: int = 48,
     freeze_epochs: int = 10,
     patience: int = 30,
+    n_gpus: int = 1,
 ):
     import json
     import os
     import shutil
     from pathlib import Path
     from ultralytics import YOLO
+
+    device = ",".join(str(i) for i in range(n_gpus))
 
     # ── Load dataset (volume first, Roboflow fallback) ────────────────────
     yaml_path = _load_volume_dataset("/models")
@@ -219,6 +222,7 @@ def train(
             imgsz=imgsz,
             batch=batch,
             freeze=10,
+            device=device,
             project="/tmp/runs",
             name="dronecat_frozen",
             patience=freeze_epochs,
@@ -253,6 +257,7 @@ def train(
         epochs=remaining,
         imgsz=imgsz,
         batch=batch,
+        device=device,
         project="/tmp/runs",
         name="dronecat_components",
         patience=patience,
@@ -289,8 +294,12 @@ def train(
         shutil.copy(last, models_path / "dronecat_yolo_last.pt")
         print("[SAVE] dronecat_yolo_last.pt → volume")
 
-    (models_path / "classes.json").write_text(json.dumps(COMPONENT_CLASSES))
-    print("[SAVE] classes.json → volume")
+    import yaml as _yaml
+    with open(yaml_path) as f:
+        _meta = _yaml.safe_load(f)
+    _classes = _meta.get("names", COMPONENT_CLASSES)
+    (models_path / "classes.json").write_text(json.dumps(_classes))
+    print(f"[SAVE] classes.json → volume ({len(_classes)} classes)")
     models_volume.commit()
 
     map50 = results.results_dict.get("metrics/mAP50(B)", 0)
@@ -302,7 +311,7 @@ def train(
     return {
         "map50": map50,
         "map50_95": map50_95,
-        "classes": COMPONENT_CLASSES,
+        "classes": _classes,
         "epochs": epochs,
         "model_size": model_size,
     }
@@ -315,12 +324,16 @@ def main(
     imgsz: int = 640,
     batch: int = 48,
     freeze_epochs: int = 10,
+    n_gpus: int = 1,
 ):
-    result = train.remote(
+    import modal
+    gpu_spec = modal.gpu.H100(count=n_gpus) if n_gpus > 1 else "H100"
+    result = train.with_options(gpu=gpu_spec).remote(
         epochs=epochs,
         model_size=model_size,
         imgsz=imgsz,
         batch=batch,
         freeze_epochs=freeze_epochs,
+        n_gpus=n_gpus,
     )
     print(f"\nResult: {result}")

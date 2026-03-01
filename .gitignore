@@ -1,11 +1,11 @@
 env
 venv
+.venv
 .env
 sessions
 __pycache__/
 *.pyc
 *.pyo
 .DS_Store
-backend/modal_app/weights/*.pt
 node_modules/
 dist/
